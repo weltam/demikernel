@@ -1,6 +1,7 @@
 *.a
 *.so
 /build/
+benchmarking/build
 
 # vim
 *.swo
