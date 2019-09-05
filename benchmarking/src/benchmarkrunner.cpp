@@ -2,21 +2,17 @@
 
 #include <chrono>
 #include <iostream>
-#include <mutex>
-#include <ostream>
 #include <ratio>
 #include <string>
-#include <thread>
 
 #include <stdlib.h>
-#include <pthread.h>
-#include <sched.h>
 
 #include "io_u.h"
 #include "iodrivers/iodriver.h"
 #include "iodrivers/spdk_nvme.h"
 #include "iodrivers/sync_read_write.h"
 #include "options.h"
+#include "utils/threading.h"
 #include "workgenerators/workgenerator.h"
 
 namespace benchmark {
@@ -26,10 +22,6 @@ using std::mutex;
 using std::ostream;
 using std::string;
 using std::thread;
-
-void pinSelfToCore(unsigned int core);
-void pinThreadToCore(unsigned int core, thread::native_handle_type nh);
-
 
 BenchmarkRunner::BenchmarkRunner(BenchmarkOptions &o) : opts(o),
     completionsThreadRun(false), completionsThreadErr(false),
@@ -478,19 +470,5 @@ void BenchmarkRunner::WriteBufferResults(ostream &outFile) {
   }
 }
 #endif
-
-void pinSelfToCore(unsigned int core) {
-  cpu_set_t mask;
-  CPU_ZERO(&mask);
-  CPU_SET(core, &mask);
-  sched_setaffinity(0, sizeof(mask), &mask);
-}
-
-void pinThreadToCore(unsigned int core, thread::native_handle_type nh) {
-  cpu_set_t mask;
-  CPU_ZERO(&mask);
-  CPU_SET(core, &mask);
-  pthread_setaffinity_np(nh, sizeof(mask), &mask);
-}
 
 }  // namespace benchmark.
