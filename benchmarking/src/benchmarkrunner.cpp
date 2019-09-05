@@ -291,7 +291,7 @@ void BenchmarkRunner::checkCompletions() {
   for (unsigned int batchSize = inFlightIos.Size();
       completionsThreadRun && !(doneQueuing && batchSize == 0);
       batchSize = inFlightIos.Size()) {
-    if (batchSize > 0) {
+    if (batchSize > 5 || doneQueuing) {
       // Make sure we only complete up to the number of requests we saw in the
       // queue when we actually held the mutex so that we don't accidentally do
       // something weird.
@@ -440,11 +440,15 @@ void BenchmarkRunner::WritePollResults(ostream &outFile,
 #ifdef SUBMIT_LATENCY
 /*
  * Output files have the following columns:
- *   1. latency of operation (ns)
+ *   1. time since start of test run (ns)
+ *   2. latency of operation (ns)
  */
-void BenchmarkRunner::WriteSubmitResults(ostream &outFile) {
+void BenchmarkRunner::WriteSubmitResults(ostream &outFile,
+    std::chrono::steady_clock::time_point startTime) {
   for (const auto &iou : allIos) {
     outFile <<
+        duration_cast<nanoseconds>(
+            iou.SubmitLatency.End - startTime).count() << "," <<
         duration_cast<nanoseconds>(
             iou.SubmitLatency.End - iou.SubmitLatency.Start).count() <<
         std::endl;

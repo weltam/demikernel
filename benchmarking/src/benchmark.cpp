@@ -82,7 +82,7 @@ int main(int argc, char **argv) {
             opts.OutputFilePrefix + "_submit.log" << std::endl;
         return -1;
       }
-      r.WriteSubmitResults(outFile);
+      r.WriteSubmitResults(outFile, totalTime.Start);
       outFile.close();
     }
 #endif

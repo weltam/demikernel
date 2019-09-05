@@ -34,7 +34,8 @@ class BenchmarkRunner {
       std::chrono::steady_clock::time_point startTime);
 #endif
 #ifdef SUBMIT_LATENCY
-  void WriteSubmitResults(std::ostream &outFile);
+  void WriteSubmitResults(std::ostream &outFile,
+      std::chrono::steady_clock::time_point startTime);
 #endif
 #ifdef BUFFER_LATENCY
   void WriteBufferResults(std::ostream &outFile);
