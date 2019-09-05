@@ -22,7 +22,8 @@ int main(int argc, char **argv) {
 
   benchmark::PcieMonitor *monitor = nullptr;
   if (!opts.MonitorDevice.empty()) {
-    monitor = new benchmark::PcieMonitor(opts.MonitorDevice);
+    monitor = new benchmark::PcieMonitor(opts.MonitorDevice,
+        opts.Cores.GetNextCore());
     monitor->Init();
   }
 

@@ -3,6 +3,8 @@
 #include <iostream>
 #include <vector>
 
+#include "utils/threading.h"
+
 namespace benchmark {
 
 namespace {
@@ -85,8 +87,8 @@ using std::string;
 using std::thread;
 using std::vector;
 
-PcieMonitor::PcieMonitor(string targetDevice) : devStack(0), devSocket(0),
-    devPart(0) {
+PcieMonitor::PcieMonitor(string targetDevice, unsigned int tcore) : core(tcore),
+    devStack(0), devSocket(0), devPart(0) {
   size_t p = 0;
   // Remove the group from the front of the address.
   std::stoul(targetDevice, &p, 16);
@@ -189,6 +191,7 @@ void PcieMonitor::Run() {
       }
     }
   });
+  pinThreadToCore(core, worker.native_handle());
 }
 
 void PcieMonitor::Exit() {
@@ -314,10 +317,10 @@ void PcieMonitor::WriteResults(std::ostream &outFile,
     outFile <<
       std::chrono::duration_cast<std::chrono::nanoseconds>(
           reading.Time.Start - startTime).count() <<
-      ", " <<
+      "," <<
       std::chrono::duration_cast<std::chrono::nanoseconds>(
           reading.Time.End - reading.Time.Start).count() <<
-      ", " << reading.Data << ", " << reading.Event << std::endl;
+      "," << reading.Data << "," << reading.Event << std::endl;
   }
 }
 

@@ -35,7 +35,7 @@ struct MonitorData {
 
 class PcieMonitor {
  public:
-  PcieMonitor(std::string targetDevice);
+  PcieMonitor(std::string targetDevice, unsigned int tcore);
   ~PcieMonitor();
   int Init();
   void Run();
@@ -44,6 +44,7 @@ class PcieMonitor {
       std::chrono::steady_clock::time_point startTime);
 
  private:
+  unsigned int core;
   std::thread worker;
   PCM *pcm = nullptr;
   struct bdf target;
