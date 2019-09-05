@@ -125,40 +125,40 @@ for RWT in ${RW[@]}; do
         DRIVER_OPTS=""
         if [ ${DEV} == "spdk" ]; then
           DRIVER_OPTS="${DRIVER_OPTS} -t PCIe -a ${SSD_PCIE} -n 1"
-          COMMON_OPTS="${COMMON_OPTS} -c 10,30 -d spdk -a -M${SSD_PCIE}"
+          COMMON_OPTS="${COMMON_OPTS} -c 0,10,30 -d spdk -a -M${SSD_PCIE}"
         elif [ ${DEV} == "spdk_delay" ]; then
           DRIVER_OPTS="${DRIVER_OPTS} -t PCIe -a ${SSD_PCIE} -n 1 -d"
-          COMMON_OPTS="${COMMON_OPTS} -c 10,30 -d spdk -a -M${SSD_PCIE}"
+          COMMON_OPTS="${COMMON_OPTS} -c 0,10,30 -d spdk -a -M${SSD_PCIE}"
         elif [ ${DEV} == "spdk_batch" ]; then
           DRIVER_OPTS="${DRIVER_OPTS} -t PCIe -a ${SSD_PCIE} -n 1"
-          COMMON_OPTS="${COMMON_OPTS} -c 10,30 -d spdk -a -M${SSD_PCIE}"
+          COMMON_OPTS="${COMMON_OPTS} -c 0,10,30 -d spdk -a -M${SSD_PCIE}"
         elif [ ${DEV} == "spdk_delay_batch" ]; then
           DRIVER_OPTS="${DRIVER_OPTS} -t PCIe -a ${SSD_PCIE} -n 1 -d"
-          COMMON_OPTS="${COMMON_OPTS} -c 10,30 -d spdk -a -M${SSD_PCIE}"
+          COMMON_OPTS="${COMMON_OPTS} -c 0,10,30 -d spdk -a -M${SSD_PCIE}"
         elif [ ${DEV} == "spdk4096" ]; then
           DRIVER_OPTS="${DRIVER_OPTS} -t PCIe -a ${SSD4096_PCIE} -n 1"
-          COMMON_OPTS="${COMMON_OPTS} -c 10,30 -d spdk -a -M${SSD4096_PCIE}"
+          COMMON_OPTS="${COMMON_OPTS} -c 0,10,30 -d spdk -a -M${SSD4096_PCIE}"
         elif [ ${DEV} == "spdk4096_delay" ]; then
           DRIVER_OPTS="${DRIVER_OPTS} -t PCIe -a ${SSD4096_PCIE} -n 1 -d"
-          COMMON_OPTS="${COMMON_OPTS} -c 10,30 -d spdk -a -M${SSD4096_PCIE}"
+          COMMON_OPTS="${COMMON_OPTS} -c 0,10,30 -d spdk -a -M${SSD4096_PCIE}"
         elif [ ${DEV} == "spdk4096_batch" ]; then
           DRIVER_OPTS="${DRIVER_OPTS} -t PCIe -a ${SSD4096_PCIE} -n 1"
-          COMMON_OPTS="${COMMON_OPTS} -c 10,30 -d spdk -a -M${SSD4096_PCIE}"
+          COMMON_OPTS="${COMMON_OPTS} -c 0,10,30 -d spdk -a -M${SSD4096_PCIE}"
         elif [ ${DEV} == "spdk4096_delay_batch" ]; then
           DRIVER_OPTS="${DRIVER_OPTS} -t PCIe -a ${SSD4096_PCIE} -n 1 -d"
-          COMMON_OPTS="${COMMON_OPTS} -c 10,30 -d spdk -a -M${SSD4096_PCIE}"
+          COMMON_OPTS="${COMMON_OPTS} -c 0,10,30 -d spdk -a -M${SSD4096_PCIE}"
         elif [ ${DEV} == "spdk_optane" ]; then
           DRIVER_OPTS="${DRIVER_OPTS} -t PCIe -a ${OPT_PCIE} -n 1"
-          COMMON_OPTS="${COMMON_OPTS} -c 0,20 -d spdk -a -M${OPT_PCIE}"
+          COMMON_OPTS="${COMMON_OPTS} -c 10,0,20 -d spdk -a -M${OPT_PCIE}"
         elif [ ${DEV} == "spdk_optane_delay" ]; then
           DRIVER_OPTS="${DRIVER_OPTS} -t PCIe -a ${OPT_PCIE} -n 1 -d"
-          COMMON_OPTS="${COMMON_OPTS} -c 0,20 -d spdk -a -M${OPT_PCIE}"
+          COMMON_OPTS="${COMMON_OPTS} -c 10,0,20 -d spdk -a -M${OPT_PCIE}"
         elif [ ${DEV} == "spdk_optane_batch" ]; then
           DRIVER_OPTS="${DRIVER_OPTS} -t PCIe -a ${OPT_PCIE} -n 1"
-          COMMON_OPTS="${COMMON_OPTS} -c 0,20 -d spdk -a -b ${QS} -M${OPT_PCIE}"
+          COMMON_OPTS="${COMMON_OPTS} -c 10,0,20 -d spdk -a -b ${QS} -M${OPT_PCIE}"
         elif [ ${DEV} == "spdk_optane_delay_batch" ]; then
           DRIVER_OPTS="${DRIVER_OPTS} -t PCIe -a ${OPT_PCIE} -n 1 -d"
-          COMMON_OPTS="${COMMON_OPTS} -c 0,20 -d spdk -a -b ${QS} -M${OPT_PCIE}"
+          COMMON_OPTS="${COMMON_OPTS} -c 10,0,20 -d spdk -a -b ${QS} -M${OPT_PCIE}"
         elif [ ${DEV} == "sync" ]; then
           COMMON_OPTS="${COMMON_OPTS} -d sync -p ${SYNC_MNT}/benchmark-test"
         elif [ ${DEV} == "sync_force_sync" ]; then
