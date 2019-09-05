@@ -48,3 +48,9 @@
 [submodule "submodules/redis-vanilla"]
 	path = submodules/redis-vanilla
 	url = https://github.com/mlr-msft/redis.git
+[submodule "benchmarking/submodules/spdk"]
+	path = benchmarking/submodules/spdk
+	url = https://github.com/spdk/spdk
+[submodule "benchmarking/submodules/pcm"]
+	path = benchmarking/submodules/pcm
+	url = https://github.com/opcm/pcm

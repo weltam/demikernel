@@ -1,0 +1,597 @@
+
+ Processor Counter Monitor  ($Format:%ci ID=%h$)
+
+ This utility measure Skylake-SP IIO information
+
+ctr=0,ev_sel=0x83,umask=0x1,en=1,ch_mask=1,fc_mask=0x7,multiplier=4,divider=1,hname=IB write,vname=Part0 (1st x16/x8/x4) 701000400183
+ctr=1,ev_sel=0x83,umask=0x1,en=1,ch_mask=2,fc_mask=0x7,multiplier=4,divider=1,hname=IB write,vname=Part1 (2nd x4) 702000400183
+ctr=0,ev_sel=0x83,umask=0x1,en=1,ch_mask=4,fc_mask=0x7,multiplier=4,divider=1,hname=IB write,vname=Part2 (2nd x8/3rd x4) 704000400183
+ctr=1,ev_sel=0x83,umask=0x1,en=1,ch_mask=8,fc_mask=0x7,multiplier=4,divider=1,hname=IB write,vname=Part3 (4th x4) 708000400183
+ctr=0,ev_sel=0x83,umask=0x4,en=1,ch_mask=1,fc_mask=0x7,multiplier=4,divider=1,hname=IB read,vname=Part0 (1st x16/x8/x4) 701000400483
+ctr=1,ev_sel=0x83,umask=0x4,en=1,ch_mask=2,fc_mask=0x7,multiplier=4,divider=1,hname=IB read,vname=Part1 (2nd x4) 702000400483
+ctr=0,ev_sel=0x83,umask=0x4,en=1,ch_mask=4,fc_mask=0x7,multiplier=4,divider=1,hname=IB read,vname=Part2 (2nd x8/3rd x4) 704000400483
+ctr=1,ev_sel=0x83,umask=0x4,en=1,ch_mask=8,fc_mask=0x7,multiplier=4,divider=1,hname=IB read,vname=Part3 (4th x4) 708000400483
+ctr=2,ev_sel=0xc0,umask=0x4,en=1,ch_mask=1,fc_mask=0x7,multiplier=1,divider=1,hname=OB read,vname=Part0 (1st x16/x8/x4) 7010004004c0
+ctr=3,ev_sel=0xc0,umask=0x4,en=1,ch_mask=2,fc_mask=0x7,multiplier=1,divider=1,hname=OB read,vname=Part1 (2nd x4) 7020004004c0
+ctr=2,ev_sel=0xc0,umask=0x4,en=1,ch_mask=4,fc_mask=0x7,multiplier=1,divider=1,hname=OB read,vname=Part2 (2nd x8/3rd x4) 7040004004c0
+ctr=3,ev_sel=0xc0,umask=0x4,en=1,ch_mask=8,fc_mask=0x7,multiplier=1,divider=1,hname=OB read,vname=Part3 (4th x4) 7080004004c0
+ctr=2,ev_sel=0xc0,umask=0x1,en=1,ch_mask=1,fc_mask=0x7,multiplier=1,divider=1,hname=OB write,vname=Part0 (1st x16/x8/x4) 7010004001c0
+ctr=3,ev_sel=0xc0,umask=0x1,en=1,ch_mask=2,fc_mask=0x7,multiplier=1,divider=1,hname=OB write,vname=Part1 (2nd x4) 7020004001c0
+ctr=2,ev_sel=0xc0,umask=0x1,en=1,ch_mask=4,fc_mask=0x7,multiplier=1,divider=1,hname=OB write,vname=Part2 (2nd x8/3rd x4) 7040004001c0
+ctr=3,ev_sel=0xc0,umask=0x1,en=1,ch_mask=8,fc_mask=0x7,multiplier=1,divider=1,hname=OB write,vname=Part3 (4th x4) 7080004001c0
+ctr=0,ev_sel=0x41,umask=0x20,en=1,ch_mask=1,fc_mask=0x7,multiplier=1,divider=1,hname=TLB Miss,vname=Total 701000402041
+ctr=1,ev_sel=0x41,umask=0x10,en=1,ch_mask=1,fc_mask=0x7,multiplier=1,divider=1,hname=VT-d L3 Miss,vname=Total 701000401041
+ctr=2,ev_sel=0x41,umask=0x02,en=1,ch_mask=4,fc_mask=0x7,multiplier=1,divider=1,hname=VT-d CTXT Miss,vname=Total 704000400241
+ctr=3,ev_sel=0x84,umask=0x04,en=1,ch_mask=0x10,fc_mask=0x7,multiplier=1,divider=1,hname=VT-d Lookup,vname=Total 710000400484
+Socket0
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 0 - CBDMA/DMI      |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+    |00:00.0|Gen0 x0 |8086:2020 Intel Corporation Sky Lake-E DMI3 Registers
+    |00:04.0|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.1|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.2|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.3|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.4|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.5|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.6|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.7|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:05.0|Gen0 x0 |8086:2024 Intel Corporation Sky Lake-E MM/Vt-d Configuration Registers
+    |00:05.2|Gen0 x0 |8086:2025 Intel Corporation Sky Lake-E RAS
+    |00:05.4|Gen0 x0 |8086:2026 Intel Corporation Sky Lake-E IOAPIC
+    |00:08.0|Gen0 x0 |8086:2014 Intel Corporation Sky Lake-E Ubox Registers
+    |00:08.1|Gen0 x0 |8086:2015 Intel Corporation Sky Lake-E Ubox Registers
+    |00:08.2|Gen0 x0 |8086:2016 Intel Corporation Sky Lake-E Ubox Registers
+    |00:11.0|Gen0 x0 |8086:A1EC Intel Corporation C620 Series Chipset Family MROM 0
+    |00:11.1|Gen0 x0 |8086:A1ED Intel Corporation C620 Series Chipset Family MROM 1
+    |00:14.0|Gen0 x0 |8086:A1AF Intel Corporation C620 Series Chipset Family USB 3.0 xHCI Controller
+    |00:14.2|Gen0 x0 |8086:A1B1 Intel Corporation C620 Series Chipset Family Thermal Subsystem
+    |00:16.0|Gen0 x0 |8086:A1BA Intel Corporation C620 Series Chipset Family MEI Controller #1
+    |00:16.4|Gen0 x0 |8086:A1BE Intel Corporation C620 Series Chipset Family MEI Controller #3
+    |00:1C.0|Gen0 x0 |8086:A190 Intel Corporation C620 Series Chipset Family PCI Express Root Port #1
+        |00:1C.4|Gen0 x0 |8086:A194 Intel Corporation C620 Series Chipset Family PCI Express Root Port #5
+            |00:1F.0|Gen0 x0 |8086:A1C1 Intel Corporation C621 Series Chipset LPC/eSPI Controller
+            |00:1F.2|Gen0 x0 |8086:A1A1 Intel Corporation C620 Series Chipset Family Power Management Controller
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 1 - PCIe0          |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+    |12:00.0|Gen3 x4 |8086:2700 Intel Corporation Optane SSD 900P Series
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 2 - PCIe1          |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |  11 K  |  22 K |   0   |  53    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+    |37:00.0|Gen3 x16|15B3:1017 Mellanox Technologies MT27800 Family [ConnectX-5]
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 3 - PCIe2          |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |  11 K  |  23 K |   0   | 106    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+    |5C:00.0|Gen3 x8 |9005:028F Adaptec Smart Storage PQI 12G SAS/PCIe 3
+    |5D:00.0|Gen3 x8 |15B3:1015 Mellanox Technologies MT27710 Family [ConnectX-4 Lx]
+    |5D:00.1|Gen3 x8 |15B3:1015 Mellanox Technologies MT27710 Family [ConnectX-4 Lx]
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 4 - MCP0           |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 5 - MCP1           |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+Socket1
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 0 - CBDMA/DMI      |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 1 - PCIe0          |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 2 - PCIe1          |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+    |AF:00.0|Gen3 x4 |144D:A804 Samsung Electronics Co Ltd NVMe SSD Controller SM961/PM961
+    |B0:00.0|Gen3 x4 |144D:A804 Samsung Electronics Co Ltd NVMe SSD Controller SM961/PM961
+    |B1:00.0|Gen3 x4 |144D:A804 Samsung Electronics Co Ltd NVMe SSD Controller SM961/PM961
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 3 - PCIe2          |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 4 - MCP0           |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 5 - MCP1           |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+Socket0
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 0 - CBDMA/DMI      |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   | 853    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+    |00:00.0|Gen0 x0 |8086:2020 Intel Corporation Sky Lake-E DMI3 Registers
+    |00:04.0|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.1|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.2|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.3|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.4|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.5|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.6|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.7|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:05.0|Gen0 x0 |8086:2024 Intel Corporation Sky Lake-E MM/Vt-d Configuration Registers
+    |00:05.2|Gen0 x0 |8086:2025 Intel Corporation Sky Lake-E RAS
+    |00:05.4|Gen0 x0 |8086:2026 Intel Corporation Sky Lake-E IOAPIC
+    |00:08.0|Gen0 x0 |8086:2014 Intel Corporation Sky Lake-E Ubox Registers
+    |00:08.1|Gen0 x0 |8086:2015 Intel Corporation Sky Lake-E Ubox Registers
+    |00:08.2|Gen0 x0 |8086:2016 Intel Corporation Sky Lake-E Ubox Registers
+    |00:11.0|Gen0 x0 |8086:A1EC Intel Corporation C620 Series Chipset Family MROM 0
+    |00:11.1|Gen0 x0 |8086:A1ED Intel Corporation C620 Series Chipset Family MROM 1
+    |00:14.0|Gen0 x0 |8086:A1AF Intel Corporation C620 Series Chipset Family USB 3.0 xHCI Controller
+    |00:14.2|Gen0 x0 |8086:A1B1 Intel Corporation C620 Series Chipset Family Thermal Subsystem
+    |00:16.0|Gen0 x0 |8086:A1BA Intel Corporation C620 Series Chipset Family MEI Controller #1
+    |00:16.4|Gen0 x0 |8086:A1BE Intel Corporation C620 Series Chipset Family MEI Controller #3
+    |00:1C.0|Gen0 x0 |8086:A190 Intel Corporation C620 Series Chipset Family PCI Express Root Port #1
+        |00:1C.4|Gen0 x0 |8086:A194 Intel Corporation C620 Series Chipset Family PCI Express Root Port #5
+            |00:1F.0|Gen0 x0 |8086:A1C1 Intel Corporation C621 Series Chipset LPC/eSPI Controller
+            |00:1F.2|Gen0 x0 |8086:A1A1 Intel Corporation C620 Series Chipset Family Power Management Controller
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 1 - PCIe0          |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+    |12:00.0|Gen3 x4 |8086:2700 Intel Corporation Optane SSD 900P Series
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 2 - PCIe1          |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |  11 K  |  22 K |   0   | 186    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+    |37:00.0|Gen3 x16|15B3:1017 Mellanox Technologies MT27800 Family [ConnectX-5]
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 3 - PCIe2          |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |  23 K  |  47 K |   0   |  53    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+    |5C:00.0|Gen3 x8 |9005:028F Adaptec Smart Storage PQI 12G SAS/PCIe 3
+    |5D:00.0|Gen3 x8 |15B3:1015 Mellanox Technologies MT27710 Family [ConnectX-4 Lx]
+    |5D:00.1|Gen3 x8 |15B3:1015 Mellanox Technologies MT27710 Family [ConnectX-4 Lx]
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 4 - MCP0           |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 5 - MCP1           |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+Socket1
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 0 - CBDMA/DMI      |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 1 - PCIe0          |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 2 - PCIe1          |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+    |AF:00.0|Gen3 x4 |144D:A804 Samsung Electronics Co Ltd NVMe SSD Controller SM961/PM961
+    |B0:00.0|Gen3 x4 |144D:A804 Samsung Electronics Co Ltd NVMe SSD Controller SM961/PM961
+    |B1:00.0|Gen3 x4 |144D:A804 Samsung Electronics Co Ltd NVMe SSD Controller SM961/PM961
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 3 - PCIe2          |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 4 - MCP0           |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 5 - MCP1           |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+Socket0
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 0 - CBDMA/DMI      |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   | 853    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+    |00:00.0|Gen0 x0 |8086:2020 Intel Corporation Sky Lake-E DMI3 Registers
+    |00:04.0|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.1|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.2|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.3|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.4|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.5|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.6|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.7|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:05.0|Gen0 x0 |8086:2024 Intel Corporation Sky Lake-E MM/Vt-d Configuration Registers
+    |00:05.2|Gen0 x0 |8086:2025 Intel Corporation Sky Lake-E RAS
+    |00:05.4|Gen0 x0 |8086:2026 Intel Corporation Sky Lake-E IOAPIC
+    |00:08.0|Gen0 x0 |8086:2014 Intel Corporation Sky Lake-E Ubox Registers
+    |00:08.1|Gen0 x0 |8086:2015 Intel Corporation Sky Lake-E Ubox Registers
+    |00:08.2|Gen0 x0 |8086:2016 Intel Corporation Sky Lake-E Ubox Registers
+    |00:11.0|Gen0 x0 |8086:A1EC Intel Corporation C620 Series Chipset Family MROM 0
+    |00:11.1|Gen0 x0 |8086:A1ED Intel Corporation C620 Series Chipset Family MROM 1
+    |00:14.0|Gen0 x0 |8086:A1AF Intel Corporation C620 Series Chipset Family USB 3.0 xHCI Controller
+    |00:14.2|Gen0 x0 |8086:A1B1 Intel Corporation C620 Series Chipset Family Thermal Subsystem
+    |00:16.0|Gen0 x0 |8086:A1BA Intel Corporation C620 Series Chipset Family MEI Controller #1
+    |00:16.4|Gen0 x0 |8086:A1BE Intel Corporation C620 Series Chipset Family MEI Controller #3
+    |00:1C.0|Gen0 x0 |8086:A190 Intel Corporation C620 Series Chipset Family PCI Express Root Port #1
+        |00:1C.4|Gen0 x0 |8086:A194 Intel Corporation C620 Series Chipset Family PCI Express Root Port #5
+            |00:1F.0|Gen0 x0 |8086:A1C1 Intel Corporation C621 Series Chipset LPC/eSPI Controller
+            |00:1F.2|Gen0 x0 |8086:A1A1 Intel Corporation C620 Series Chipset Family Power Management Controller
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 1 - PCIe0          |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+    |12:00.0|Gen3 x4 |8086:2700 Intel Corporation Optane SSD 900P Series
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 2 - PCIe1          |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |  11 K  |  22 K |   0   |  53    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+    |37:00.0|Gen3 x16|15B3:1017 Mellanox Technologies MT27800 Family [ConnectX-5]
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 3 - PCIe2          |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   6       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |  11 K  |  23 K |   0   | 106    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+    |5C:00.0|Gen3 x8 |9005:028F Adaptec Smart Storage PQI 12G SAS/PCIe 3
+    |5D:00.0|Gen3 x8 |15B3:1015 Mellanox Technologies MT27710 Family [ConnectX-4 Lx]
+    |5D:00.1|Gen3 x8 |15B3:1015 Mellanox Technologies MT27710 Family [ConnectX-4 Lx]
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 4 - MCP0           |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 5 - MCP1           |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+Socket1
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 0 - CBDMA/DMI      |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 1 - PCIe0          |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 2 - PCIe1          |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+    |AF:00.0|Gen3 x4 |144D:A804 Samsung Electronics Co Ltd NVMe SSD Controller SM961/PM961
+    |B0:00.0|Gen3 x4 |144D:A804 Samsung Electronics Co Ltd NVMe SSD Controller SM961/PM961
+    |B1:00.0|Gen3 x4 |144D:A804 Samsung Electronics Co Ltd NVMe SSD Controller SM961/PM961
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 3 - PCIe2          |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 4 - MCP0           |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 5 - MCP1           |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+Socket0
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 0 - CBDMA/DMI      |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   | 853    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+    |00:00.0|Gen0 x0 |8086:2020 Intel Corporation Sky Lake-E DMI3 Registers
+    |00:04.0|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.1|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.2|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.3|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.4|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.5|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.6|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:04.7|Gen0 x0 |8086:2021 Intel Corporation Sky Lake-E CBDMA Registers
+    |00:05.0|Gen0 x0 |8086:2024 Intel Corporation Sky Lake-E MM/Vt-d Configuration Registers
+    |00:05.2|Gen0 x0 |8086:2025 Intel Corporation Sky Lake-E RAS
+    |00:05.4|Gen0 x0 |8086:2026 Intel Corporation Sky Lake-E IOAPIC
+    |00:08.0|Gen0 x0 |8086:2014 Intel Corporation Sky Lake-E Ubox Registers
+    |00:08.1|Gen0 x0 |8086:2015 Intel Corporation Sky Lake-E Ubox Registers
+    |00:08.2|Gen0 x0 |8086:2016 Intel Corporation Sky Lake-E Ubox Registers
+    |00:11.0|Gen0 x0 |8086:A1EC Intel Corporation C620 Series Chipset Family MROM 0
+    |00:11.1|Gen0 x0 |8086:A1ED Intel Corporation C620 Series Chipset Family MROM 1
+    |00:14.0|Gen0 x0 |8086:A1AF Intel Corporation C620 Series Chipset Family USB 3.0 xHCI Controller
+    |00:14.2|Gen0 x0 |8086:A1B1 Intel Corporation C620 Series Chipset Family Thermal Subsystem
+    |00:16.0|Gen0 x0 |8086:A1BA Intel Corporation C620 Series Chipset Family MEI Controller #1
+    |00:16.4|Gen0 x0 |8086:A1BE Intel Corporation C620 Series Chipset Family MEI Controller #3
+    |00:1C.0|Gen0 x0 |8086:A190 Intel Corporation C620 Series Chipset Family PCI Express Root Port #1
+        |00:1C.4|Gen0 x0 |8086:A194 Intel Corporation C620 Series Chipset Family PCI Express Root Port #5
+            |00:1F.0|Gen0 x0 |8086:A1C1 Intel Corporation C621 Series Chipset LPC/eSPI Controller
+            |00:1F.2|Gen0 x0 |8086:A1A1 Intel Corporation C620 Series Chipset Family Power Management Controller
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 1 - PCIe0          |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+    |12:00.0|Gen3 x4 |8086:2700 Intel Corporation Optane SSD 900P Series
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 2 - PCIe1          |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |  11 K  |  22 K |   0   |  60    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+    |37:00.0|Gen3 x16|15B3:1017 Mellanox Technologies MT27800 Family [ConnectX-5]
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 3 - PCIe2          |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |  13    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |  23 K  |  47 K |  40   | 160    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+    |5C:00.0|Gen3 x8 |9005:028F Adaptec Smart Storage PQI 12G SAS/PCIe 3
+    |5D:00.0|Gen3 x8 |15B3:1015 Mellanox Technologies MT27710 Family [ConnectX-4 Lx]
+    |5D:00.1|Gen3 x8 |15B3:1015 Mellanox Technologies MT27710 Family [ConnectX-4 Lx]
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 4 - MCP0           |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 5 - MCP1           |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+Socket1
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 0 - CBDMA/DMI      |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 1 - PCIe0          |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 2 - PCIe1          |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+    |AF:00.0|Gen3 x4 |144D:A804 Samsung Electronics Co Ltd NVMe SSD Controller SM961/PM961
+    |B0:00.0|Gen3 x4 |144D:A804 Samsung Electronics Co Ltd NVMe SSD Controller SM961/PM961
+    |B1:00.0|Gen3 x4 |144D:A804 Samsung Electronics Co Ltd NVMe SSD Controller SM961/PM961
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 3 - PCIe2          |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 4 - MCP0           |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
+|IIO Stack 5 - MCP1           |IB write|IB read|OB read|OB write|TLB Miss|VT-d L3 Miss|VT-d CTXT Miss|VT-d Lookup|
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+| Part0 (1st x16/x8/x4)       |   0    |   0   |   0   |   0    |   0    |   0        |   0          |   0       |
+| Part1 (2nd x4)              |   0    |   0   |   0   |   0    |
+| Part2 (2nd x8/3rd x4)       |   0    |   0   |   0   |   0    |
+| Part3 (4th x4)              |   0    |   0   |   0   |   0    |
+|_____________________________|________|_______|_______|________|________|____________|______________|___________|
+ _____________________________ ________ _______ _______ ________ ________ ____________ ______________ ___________ 
