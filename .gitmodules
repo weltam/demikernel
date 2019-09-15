@@ -53,4 +53,4 @@
 	url = https://github.com/spdk/spdk
 [submodule "benchmarking/submodules/pcm"]
 	path = benchmarking/submodules/pcm
-	url = https://github.com/opcm/pcm
+	url = git@github.com:ashmrtn/pcm.git
