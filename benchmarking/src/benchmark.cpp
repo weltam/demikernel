@@ -4,7 +4,9 @@
 
 #include "benchmarkrunner.h"
 #include "iodrivers/iodriver.h"
+#ifdef PCM
 #include "pcm/pcie_monitor.h"
+#endif
 #include "options.h"
 #include "utils/time_tracking.h"
 
@@ -20,12 +22,14 @@ int main(int argc, char **argv) {
     return -1;
   }
 
+#ifdef PCM
   benchmark::PcieMonitor *monitor = nullptr;
   if (!opts.MonitorDevice.empty()) {
     monitor = new benchmark::PcieMonitor(opts.MonitorDevice,
         opts.Cores.GetNextCore());
     monitor->Init();
   }
+#endif
 
   benchmark::BenchmarkRunner r(opts);
 
@@ -35,16 +39,20 @@ int main(int argc, char **argv) {
   benchmark::TimeDif totalTime;
   totalTime.Start = std::chrono::steady_clock::now();
 
+#ifdef PCM
   if (monitor != nullptr) {
     monitor->Run();
   }
+#endif
 
   int rc = r.Run();
   if (rc != 0) {
+#ifdef PCM
     if (monitor != nullptr) {
       monitor->Exit();
       delete monitor;
     }
+#endif
     return rc;
   }
   totalTime.End = std::chrono::steady_clock::now();
@@ -100,6 +108,7 @@ int main(int argc, char **argv) {
     }
 #endif
 
+#ifdef PCM
     if (monitor != nullptr) {
       std::ofstream outFile(opts.OutputFilePrefix + "_pcie-mon.log");
       if (!outFile.good()) {
@@ -110,12 +119,15 @@ int main(int argc, char **argv) {
       monitor->WriteResults(outFile, totalTime.Start);
       outFile.close();
     }
+#endif
   }
 
+#ifdef PCM
   if (monitor != nullptr) {
     monitor->Exit();
     delete monitor;
   }
+#endif
 
   std::cout << "Total benchmark runtime was " <<
     std::chrono::duration_cast<std::chrono::nanoseconds>(
