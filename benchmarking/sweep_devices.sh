@@ -34,16 +34,6 @@ DEVS=(
   #"sync_ramdisk"
 )
 
-SSD_PCIE="0000.af.00.0"
-SSD4096_PCIE="0000.b0.00.0"
-OPT_PCIE="0000.12.00.0"
-
-LIBAIO_MNT="/mnt/libaio_nvme"
-LIBAIO_DEV="/dev/nvme3n1p1"
-SYNC_MNT="/mnt/sync_nvme"
-SYNC_DEV="/dev/nvme4n1p1"
-SYNC_RAM_MNT="/mnt/sync_ramdisk"
-
 MAX_FILE_SIZE=21474836480
 
 BLK_SIZES=(
@@ -72,6 +62,13 @@ QSIZE=(
 
 NUM_REQS=1000000
 
+RLAT=true
+RPOLL=true
+RSUB=true
+RBUF=false
+RPCI=false
+FSYNC=false
+
 set -e
 
 for RWT in ${RW[@]}; do
@@ -90,14 +87,6 @@ for RWT in ${RW[@]}; do
         OP="${OUTPUT_DIR}/${RWT}/q${QS}/${DEV}/bs${BS}/"
 
         mkdir -p "${OP}"
-
-        COMMON_OPTS="-f ${OP} -n ${NUM_REQS} -q ${QS} -t ${RWT}"
-        COMMON_OPTS="${COMMON_OPTS} -i ${BS} -m ${MAX_FILE_SIZE}"
-        # Add what we want to be output.
-        COMMON_OPTS="${COMMON_OPTS} --latency-results"
-        #COMMON_OPTS="${COMMON_OPTS} --poll-results"
-        COMMON_OPTS="${COMMON_OPTS} --submission-results"
-        #COMMON_OPTS="${COMMON_OPTS} --buffer-results"
 
         # Unmount fs, reformat, and remount.
         if [ ${DEV} == "libaio" ]; then
@@ -122,57 +111,26 @@ for RWT in ${RW[@]}; do
         fi
 
         # Actually run things.
-        DRIVER_OPTS=""
-        if [ ${DEV} == "spdk" ]; then
-          DRIVER_OPTS="${DRIVER_OPTS} -t PCIe -a ${SSD_PCIE} -n 1"
-          COMMON_OPTS="${COMMON_OPTS} -c 0,10,30 -d spdk -a -M${SSD_PCIE}"
-        elif [ ${DEV} == "spdk_delay" ]; then
-          DRIVER_OPTS="${DRIVER_OPTS} -t PCIe -a ${SSD_PCIE} -n 1 -d"
-          COMMON_OPTS="${COMMON_OPTS} -c 0,10,30 -d spdk -a -M${SSD_PCIE}"
-        elif [ ${DEV} == "spdk_batch" ]; then
-          DRIVER_OPTS="${DRIVER_OPTS} -t PCIe -a ${SSD_PCIE} -n 1"
-          COMMON_OPTS="${COMMON_OPTS} -c 0,10,30 -d spdk -a -M${SSD_PCIE}"
-        elif [ ${DEV} == "spdk_delay_batch" ]; then
-          DRIVER_OPTS="${DRIVER_OPTS} -t PCIe -a ${SSD_PCIE} -n 1 -d"
-          COMMON_OPTS="${COMMON_OPTS} -c 0,10,30 -d spdk -a -M${SSD_PCIE}"
-        elif [ ${DEV} == "spdk4096" ]; then
-          DRIVER_OPTS="${DRIVER_OPTS} -t PCIe -a ${SSD4096_PCIE} -n 1"
-          COMMON_OPTS="${COMMON_OPTS} -c 0,10,30 -d spdk -a -M${SSD4096_PCIE}"
-        elif [ ${DEV} == "spdk4096_delay" ]; then
-          DRIVER_OPTS="${DRIVER_OPTS} -t PCIe -a ${SSD4096_PCIE} -n 1 -d"
-          COMMON_OPTS="${COMMON_OPTS} -c 0,10,30 -d spdk -a -M${SSD4096_PCIE}"
-        elif [ ${DEV} == "spdk4096_batch" ]; then
-          DRIVER_OPTS="${DRIVER_OPTS} -t PCIe -a ${SSD4096_PCIE} -n 1"
-          COMMON_OPTS="${COMMON_OPTS} -c 0,10,30 -d spdk -a -M${SSD4096_PCIE}"
-        elif [ ${DEV} == "spdk4096_delay_batch" ]; then
-          DRIVER_OPTS="${DRIVER_OPTS} -t PCIe -a ${SSD4096_PCIE} -n 1 -d"
-          COMMON_OPTS="${COMMON_OPTS} -c 0,10,30 -d spdk -a -M${SSD4096_PCIE}"
-        elif [ ${DEV} == "spdk_optane" ]; then
-          DRIVER_OPTS="${DRIVER_OPTS} -t PCIe -a ${OPT_PCIE} -n 1"
-          COMMON_OPTS="${COMMON_OPTS} -c 10,0,20 -d spdk -a -M${OPT_PCIE}"
-        elif [ ${DEV} == "spdk_optane_delay" ]; then
-          DRIVER_OPTS="${DRIVER_OPTS} -t PCIe -a ${OPT_PCIE} -n 1 -d"
-          COMMON_OPTS="${COMMON_OPTS} -c 10,0,20 -d spdk -a -M${OPT_PCIE}"
-        elif [ ${DEV} == "spdk_optane_batch" ]; then
-          DRIVER_OPTS="${DRIVER_OPTS} -t PCIe -a ${OPT_PCIE} -n 1"
-          COMMON_OPTS="${COMMON_OPTS} -c 10,0,20 -d spdk -a -b ${QS} -M${OPT_PCIE}"
-        elif [ ${DEV} == "spdk_optane_delay_batch" ]; then
-          DRIVER_OPTS="${DRIVER_OPTS} -t PCIe -a ${OPT_PCIE} -n 1 -d"
-          COMMON_OPTS="${COMMON_OPTS} -c 10,0,20 -d spdk -a -b ${QS} -M${OPT_PCIE}"
-        elif [ ${DEV} == "sync" ]; then
-          COMMON_OPTS="${COMMON_OPTS} -d sync -p ${SYNC_MNT}/benchmark-test"
-        elif [ ${DEV} == "sync_force_sync" ]; then
-          COMMON_OPTS="${COMMON_OPTS} -d sync -p ${SYNC_MNT}/benchmark-test -s"
-        elif [ ${DEV} == "sync_ramdisk" ]; then
-          COMMON_OPTS="${COMMON_OPTS} -d sync -p ${SYNC_RAM_MNT}/benchmark-test -s"
-        fi
-        if [ -z "${DRIVER_OPTS}" ]; then
-          echo ${BENCHMARK_PATH} ${COMMON_OPTS} > ${OP}/benchmark.out
-          ${BENCHMARK_PATH} ${COMMON_OPTS} 2>&1 >> ${OP}/benchmark.out
-        else
-          echo "${BENCHMARK_PATH} ${COMMON_OPTS} -o \"${DRIVER_OPTS}\"" > ${OP}/benchmark.out
-          ${BENCHMARK_PATH} ${COMMON_OPTS} -o "${DRIVER_OPTS}" 2>&1 >> ${OP}/benchmark.out
-        fi
+
+        # Args (in order) are:
+        #   1.  output path
+        #   2.  io latency (total)
+        #   3.  poll latency
+        #   4.  submit latency
+        #   5.  buffer latency
+        #   6.  PCI profiling
+        #   7.  number requests
+        #   8.  target
+        #   9.  operation type/pattern
+        #   10  max queue depth
+        #   11. block size
+        #   12. max file size
+        #   13. force sync
+        ALL_OPTS=$(python ./gen_cmdline.py ${OP} ${RLAT} ${RPOLL} ${RSUB} \
+          ${RBUF}  ${RPCI} ${NUM_REQS} ${DEV} ${RWT} ${QS} ${BS} \
+          ${MAX_FILE_SIZE} ${FSYNC})
+        echo "${BENCHMARK_PATH} ${ALL_OPTS}" > ${OP}/benchmark.out
+        eval "${BENCHMARK_PATH} ${ALL_OPTS} 2>&1 >> ${OP}/benchmark.out"
       done
     done
   done
