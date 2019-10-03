@@ -71,7 +71,7 @@ BUILD_DIRS := $(sort $(dir $(OBJS)))
 $(BUILD_DIR)/benchmark: \
 		$(OBJS) \
 		| $(BUILD_DIR)
-	$(CXX) -o $@ $^ $(PCM_OBJS) $(LINKERFLAGS) -pthread \
+	$(CXX) -o $@ $^ $(PCM_LIBS) $(LINKERFLAGS) -pthread \
 		-L$(SPDK_LIBS_DIR) -Wl,--whole-archive $(addprefix -l,$(SPDK_LIBS)) \
 		-Wl,--no-whole-archive $(SPDK_LIBS2) \
 		-Wl,--whole-archive $(DPDK_LIBS) \
