@@ -161,7 +161,9 @@ void SpdkNvme::Teardown() {
 
 char * SpdkNvme::GetBuffer(unsigned int len) {
   // For now just allocate a buffer on the host.
-  char *ret = (char*) spdk_zmalloc(0x1000, 0x1000, NULL, SPDK_ENV_SOCKET_ID_ANY,
+  // TODO(ashmrtnz): Fix things if they aren't a multiple of 4k?
+  unsigned int size = (0x1000 < len) ? len : 0x1000;
+  char *ret = (char*) spdk_zmalloc(size, 0x1000, NULL, SPDK_ENV_SOCKET_ID_ANY,
       SPDK_MALLOC_DMA);
   if (ret == nullptr) {
     SPDK_ERRLOG("Unable to allocate write buffer\n");
