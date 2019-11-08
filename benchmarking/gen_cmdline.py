@@ -65,11 +65,17 @@ target_opts = {
   #  'transport-type': 'PCIe',
   #  'device-address': '0000.b0.00.0',
   #},
-  #'spdk4096_batch': {
-  #  'io-driver': 'spdk',
-  #  'transport-type': 'PCIe',
-  #  'device-address': '0000.b0.00.0',
-  #},
+  'spdk4096_batch': {
+    'io-driver': 'spdk',
+    'core-mask': benchmark_cores,
+    'async-completions': '',
+    'spdk_opts': {
+      'transport-type': 'PCIe',
+      'device-address': samsung_addr,
+      'namespace': '1',
+    },
+    'complete-batch': '',
+  },
   'spdk_optane': {
     'io-driver': 'spdk',
     'core-mask': benchmark_cores,
