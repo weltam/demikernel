@@ -174,7 +174,10 @@ target_opts = {
 #   11. block size
 #   12. max file size
 #   13. force sync
-if len(sys.argv) < 14:
+#   14. io-bytes to limit at
+#   15. true to limit on numRequests
+if len(sys.argv) < 15:
+  print("wrong number of arguments\n")
   sys.exit(-1)
 
 common_opts = ''
@@ -182,7 +185,6 @@ spdk_opts = ''
 
 # Build generic command line.
 common_opts += '--output-file-prefix ' + sys.argv[1] + ' '
-common_opts += '--num-requests ' + sys.argv[7] + ' '
 common_opts += '--io-type ' + sys.argv[9] + ' '
 common_opts += '--queue-depth ' + sys.argv[10] + ' '
 common_opts += '--io-size ' + sys.argv[11] + ' '
@@ -198,6 +200,11 @@ if sys.argv[4] == 'true':
   common_opts += '--submission-results '
 if sys.argv[5] == 'true':
   common_opts += '--buffer-results '
+
+if sys.argv[15] == 'true':
+    common_opts += '--num-requests ' + sys.argv[7] + ' '
+else:
+    common_opts += '--io-bytes ' + sys.argv[14] + ' '
 
 # Build spdk specific command line.
 if target_opts[sys.argv[8]]['io-driver'] == 'spdk':

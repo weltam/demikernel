@@ -128,7 +128,7 @@ for RWT in ${RW[@]}; do
         #   13. force sync
         ALL_OPTS=$(python ./gen_cmdline.py ${OP} ${RLAT} ${RPOLL} ${RSUB} \
           ${RBUF}  ${RPCI} ${NUM_REQS} ${DEV} ${RWT} ${QS} ${BS} \
-          ${MAX_FILE_SIZE} ${FSYNC})
+          ${MAX_FILE_SIZE} ${FSYNC} 0 "true")
         echo "${BENCHMARK_PATH} ${ALL_OPTS}" > ${OP}/benchmark.out
         eval "${BENCHMARK_PATH} ${ALL_OPTS} 2>&1 >> ${OP}/benchmark.out"
       done
