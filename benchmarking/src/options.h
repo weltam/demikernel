@@ -36,6 +36,8 @@ class BenchmarkOptions {
   unsigned int QueueDepth = 1;
   unsigned int CompleteBatch = 1;
   unsigned int NumRequests = 100;
+  unsigned long long IoLimitBytes = 0;
+  bool ReqLimit = true;
   unsigned long long BlockSize = 4096;
   unsigned long long MaxFileSize = 0;
   std::string TestPath;

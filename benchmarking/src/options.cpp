@@ -14,11 +14,12 @@ using std::vector;
 
 namespace {
 
-static constexpr char kOptsString[] = "M:ab:c:d:f:i:m:n:o:p:q:st:";
+static constexpr char kOptsString[] = "M:S:ab:c:d:f:i:m:n:o:p:q:st:";
 
 static const option long_options[] = {
   // Mask value must be in hex.
   {"monitor-device", required_argument, NULL, 'M'},
+  {"io-bytes", required_argument, NULL, 'I'},
   {"async-completions", no_argument, NULL, 'a'},
   {"complete-batch", required_argument, NULL, 'b'},
   {"core-mask", required_argument, NULL, 'c'},
@@ -85,6 +86,7 @@ int CoreMask::GetNextCore() {
 
 int BenchmarkOptions::ParseOptions(int argc, char **argv,
     BenchmarkOptions &opts) {
+  bool numReqs = false;
   // Reset just in case.
   int options_idx = 0;
   optind = 1;
@@ -106,6 +108,15 @@ int BenchmarkOptions::ParseOptions(int argc, char **argv,
         break;
       case 'M':
         opts.MonitorDevice = string(optarg);
+        break;
+      case 'I':
+        if (numReqs) {
+          std::cerr << "Only one of io-bytes or num-requests can be set" <<
+            std::endl;
+          return -1;
+        }
+        opts.IoLimitBytes = std::stoull(optarg);
+        opts.ReqLimit = false;
         break;
       case 'a':
         opts.AsyncCompletions = true;
@@ -146,7 +157,13 @@ int BenchmarkOptions::ParseOptions(int argc, char **argv,
         opts.MaxFileSize = std::stoull(optarg);
         break;
       case 'n':
+        if (!opts.ReqLimit) {
+          std::cerr << "Only one of io-bytes or num-requests can be set" <<
+            std::endl;
+          return -1;
+        }
         opts.NumRequests = atoi(optarg);
+        numReqs = true;
         break;
       case 'o':
         opts.DriverOpts = string(optarg);

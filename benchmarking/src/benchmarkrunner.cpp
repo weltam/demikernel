@@ -135,10 +135,17 @@ int BenchmarkRunner::runAsyncWorkload() {
   // Actually start the other thread, which we left on hold earlier because
   // setup wasn't finished.
   completionsThreadRun = true;
-  unsigned int requestsQd = 0;
+  unsigned long long completed = 0;
+  unsigned long long limit;
+  if (opts.ReqLimit) {
+    limit = opts.NumRequests;
+  } else {
+    limit = opts.IoLimitBytes;
+  }
+
   // Submit our requests, this will be interleaved with the other thread getting
   // completions.
-  while (requestsQd < opts.NumRequests) {
+  while (completed < limit) {
     if (completionsThreadErr) {
       ret = -1;
       break;
@@ -174,9 +181,15 @@ int BenchmarkRunner::runAsyncWorkload() {
 #endif
 
       iou->status = kIoQueued;
+
+      if (opts.ReqLimit) {
+        ++completed;
+      } else {
+        completed += iou->bufSize;
+      }
+
       inFlightIos.Push(iou);
       iou->currentQueueDepth = inFlightIos.Size();
-      ++requestsQd;
     }
     // Random sleep so that Optane behaves better on writes < 4k for whatever
     // random reason. Need to compile with -O0 to actually use though.
@@ -193,8 +206,15 @@ int BenchmarkRunner::runAsyncWorkload() {
 
 int BenchmarkRunner::runSyncWorkload() {
   int ret = 0;
-  unsigned long long requestsQd = 0;
-  while (requestsQd < opts.NumRequests) {
+  unsigned long long completed = 0;
+  unsigned long long limit;
+  if (opts.ReqLimit) {
+    limit = opts.NumRequests;
+  } else {
+    limit = opts.IoLimitBytes;
+  }
+
+  while (completed < limit) {
     // For now, don't count the time it takes to allocate buffer memory and
     // fill it in if needed.
     Io_u *iou = allocateAndFillIou();
@@ -228,8 +248,15 @@ int BenchmarkRunner::runSyncWorkload() {
 #endif
 
     iou->status = kIoCompleted;
+
+    if (opts.ReqLimit) {
+      ++completed;
+    } else {
+      completed += iou->bufSize;
+    }
+
     inFlightIos.Push(iou);
-    ++requestsQd;
+
   }
   return ret;
 }
