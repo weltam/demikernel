@@ -1,0 +1,17 @@
+syntax = "proto2";
+package stress;
+
+// simplest message that can be made arbitrarily large
+message GetMessage {
+    required string key = 1;
+}
+
+// simple message that can be made arbitrarily large
+// by making the strings arbitrarily large
+message PutMessage {
+    required string key = 1;
+    required string value = 2;
+}
+
+// TODO: try to see if protobuf complexity is also a factor
+

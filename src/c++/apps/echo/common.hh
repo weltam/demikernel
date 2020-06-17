@@ -11,6 +11,7 @@
 #include <dmtr/libos/mem.h>
 #include <string.h>
 #include <yaml-cpp/yaml.h>
+#include "stress.pb.h"
 
 uint16_t port = 12345;
 boost::optional<std::string> server_ip_addr;
@@ -19,6 +20,7 @@ uint32_t iterations = 10;
 uint32_t clients = 1;
 const char FILL_CHAR = 'a';
 boost::optional<std::string> file;
+boost::optional<std::string> protobuf;
 
 using namespace boost::program_options;
 
@@ -34,7 +36,8 @@ void parse_args(int argc, char **argv, bool server)
         ("iterations,i", value<uint32_t>(&iterations)->default_value(10), "test iterations")
         ("clients,c", value<uint32_t>(&clients)->default_value(1), "clients")
         ("config-path,r", value<std::string>(&config_path)->default_value("./config.yaml"), "specify configuration file")
-        ("file", value<std::string>(), "log file");
+        ("file", value<std::string>(), "log file")
+        ("protobuf", value<std::string>()->default_value("none"), "protobuf data type to test");
 
     variables_map vm;
     store(parse_command_line(argc, argv, desc), vm);
@@ -99,6 +102,10 @@ void parse_args(int argc, char **argv, bool server)
 
     if (vm.count("file")) {
         file = vm["file"].as<std::string>();
+    }
+
+    if (vm.count("protobuf")) {
+        protobuf = vm["protobuf"].as<std::string>();
     }
 };
 
