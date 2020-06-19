@@ -11,7 +11,6 @@
 #include <dmtr/libos/mem.h>
 #include <string.h>
 #include <yaml-cpp/yaml.h>
-#include "stress.pb.h"
 
 uint16_t port = 12345;
 boost::optional<std::string> server_ip_addr;
@@ -20,7 +19,9 @@ uint32_t iterations = 10;
 uint32_t clients = 1;
 const char FILL_CHAR = 'a';
 boost::optional<std::string> file;
-boost::optional<std::string> protobuf;
+boost::optional<std::string> protobuf_opt;
+std::string protobuf = std::string("none");
+bool run_protobuf_test = false;
 
 using namespace boost::program_options;
 
@@ -37,7 +38,7 @@ void parse_args(int argc, char **argv, bool server)
         ("clients,c", value<uint32_t>(&clients)->default_value(1), "clients")
         ("config-path,r", value<std::string>(&config_path)->default_value("./config.yaml"), "specify configuration file")
         ("file", value<std::string>(), "log file")
-        ("protobuf", value<std::string>()->default_value("none"), "protobuf data type to test");
+        ("protobuf", value<std::string>(), "protobuf data type to test");
 
     variables_map vm;
     store(parse_command_line(argc, argv, desc), vm);
@@ -105,7 +106,12 @@ void parse_args(int argc, char **argv, bool server)
     }
 
     if (vm.count("protobuf")) {
-        protobuf = vm["protobuf"].as<std::string>();
+        protobuf_opt = vm["protobuf"].as<std::string>();
+        if (boost::none != protobuf_opt) {
+            protobuf = boost::get(protobuf_opt).c_str();
+            std::cout << "Setting run protobuf test to true with: " << protobuf << std::endl;
+            run_protobuf_test = true;
+        }
     }
 };
 
@@ -118,5 +124,4 @@ void* generate_packet()
     s[packet_size - 1] = '\0';
     return p;
 };
-
 #endif

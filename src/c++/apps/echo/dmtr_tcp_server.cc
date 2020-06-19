@@ -2,6 +2,7 @@
 // Licensed under the MIT license.
 
 #include "common.hh"
+#include "protobuf.hh"
 #include <arpa/inet.h>
 #include <boost/chrono.hpp>
 #include <boost/optional.hpp>
@@ -37,6 +38,10 @@ dmtr_latency_t *push_wait_latency = NULL;
 dmtr_latency_t *file_log_latency = NULL;
 #endif
 
+dmtr_latency_t *deserialize_latency = NULL;
+dmtr_latency_t *serialize_latency = NULL;
+dmtr_latency_t *cereal_latency = NULL;
+
 void sig_handler(int signo)
 {
 #ifdef DMTR_PROFILE
@@ -45,7 +50,12 @@ void sig_handler(int signo)
     dmtr_dump_latency(stderr, push_wait_latency);
     dmtr_dump_latency(stderr, file_log_latency);
 #endif
-    
+
+    if (run_protobuf_test) {
+        dmtr_dump_latency(stderr, deserialize_latency);
+        dmtr_dump_latency(stderr, serialize_latency);
+        dmtr_dump_latency(stderr, cereal_latency);
+    } 
     dmtr_close(lqd);
     if (0 != fqd) dmtr_close(fqd);
     std::cerr << "Sent: " << sent << "  Recved: " << recved << std::endl;
@@ -82,6 +92,13 @@ int main(int argc, char *argv[])
     std::unordered_map<dmtr_qtoken_t, boost::chrono::time_point<boost::chrono::steady_clock>> start_times;
   
 #endif
+
+    if (run_protobuf_test) {
+        init_protobuf(protobuf, packet_size);
+        DMTR_OK(dmtr_new_latency(&deserialize_latency, "deserialize server"));
+        DMTR_OK(dmtr_new_latency(&serialize_latency, "serialize server"));
+        DMTR_OK(dmtr_new_latency(&cereal_latency, "total cereal server"));
+    }
 
     std::vector<dmtr_qtoken_t> tokens;
     dmtr_qtoken_t push_tokens[256];
@@ -142,6 +159,14 @@ int main(int argc, char *argv[])
                 //DMTR_TRUE(EINVAL, DMTR_OPC_POP == wait_out.qr_opcode);
                 //DMTR_TRUE(EINVAL, wait_out.qr_value.sga.sga_numsegs == 1);
                 recved++;
+                auto start = boost::chrono::steady_clock::now();
+                if (run_protobuf_test) {
+                    // de-serialize the message
+                    decode_serialized_msg(wait_out.qr_value.sga);
+                    auto deserialize_time = boost::chrono::steady_clock::now() - start;
+                    DMTR_OK(dmtr_record_latency(deserialize_latency, deserialize_time.count()));
+                }
+
 #ifdef DMTR_PROFILE
                 qtemp = tokens[idx];
                 auto pop_dt = boost::chrono::steady_clock::now() - start_times[qtemp];
@@ -176,6 +201,15 @@ int main(int argc, char *argv[])
                 }
                 push_tokens[idx] = 0;
                 // push back to client
+                // re-serialize the msg
+                if (run_protobuf_test) {
+                    auto start_serialize = boost::chrono::steady_clock::now();
+                    generate_protobuf_packet(wait_out.qr_value.sga, protobuf, packet_size); 
+                    auto end_serialize = boost::chrono::steady_clock::now();
+                    auto serialize_time = end_serialize - start_serialize;
+                    DMTR_OK(dmtr_record_latency(serialize_latency, serialize_time.count()));
+                    DMTR_OK(dmtr_record_latency(cereal_latency, (end_serialize - start).count()));
+                }
                 DMTR_OK(dmtr_push(&push_tokens[idx], wait_out.qr_qd, &wait_out.qr_value.sga));
                 sent++;
 #ifdef DMTR_PROFILE

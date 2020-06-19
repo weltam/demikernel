@@ -13,5 +13,32 @@ message PutMessage {
     required string value = 2;
 }
 
-// TODO: try to see if protobuf complexity is also a factor
+// two leaves
+message Msg1L {
+    required GetMessage left = 1;
+    required GetMessage right = 2;
+}
 
+// triple nested (four leaves)
+message Msg2L {
+    required Msg1L left = 1;
+    required Msg1L right = 2;
+}
+
+// eight leaves
+message Msg3L {
+    required Msg2L left = 1;
+    required Msg2L right = 2; 
+}
+
+// 16 leaves
+message Msg4L {
+    required Msg3L left = 1;
+    required Msg3L right = 2;
+}
+
+// 32 leaves
+message Msg5L {
+    required Msg4L left = 1;
+    required Msg4L right = 2;
+}

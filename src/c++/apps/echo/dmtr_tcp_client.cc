@@ -2,6 +2,7 @@
 // Licensed under the MIT license.
 
 #include "common.hh"
+#include "protobuf.hh"
 #include <arpa/inet.h>
 #include <boost/chrono.hpp>
 #include <boost/optional.hpp>
@@ -69,10 +70,17 @@ int main(int argc, char *argv[]) {
     dmtr_qresult_t qr = {};
     DMTR_OK(dmtr_wait(&qr, q));
     std::cerr << "Connected." << std::endl;
-    
-    sga.sga_numsegs = 1;
-    sga.sga_segs[0].sgaseg_len = packet_size;
-    sga.sga_segs[0].sgaseg_buf = generate_packet();
+
+    // if not running protobuf test, send normal aaaa
+    if (!run_protobuf_test) {
+        sga.sga_numsegs = 1;
+        sga.sga_segs[0].sgaseg_len = packet_size;
+        sga.sga_segs[0].sgaseg_buf = generate_packet();
+    } else {
+        init_protobuf(protobuf, packet_size);
+        sga.sga_numsegs = 1;
+        generate_protobuf_packet(sga, protobuf, packet_size);
+    }
     
     std::cerr << "Number of clients: " << clients << std::endl;
 

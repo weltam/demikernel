@@ -22,9 +22,9 @@ include_directories(${PROJECT_BINARY_DIR})
 
 
 set(TCP_ECHO_SERVER_SOURCES ${ECHO_APPS_DIR}/dmtr_tcp_server.cc
-    ${SRC_ECHO_MSG_PROTO} ${HDR_ECHO_MSG_PROTO})
+    ${SRC_ECHO_MSG_PROTO} ${HDR_ECHO_MSG_PROTO} ${ECHO_APPS_DIR}/protobuf.cc)
 set(TCP_ECHO_CLIENT_SOURCES ${ECHO_APPS_DIR}/dmtr_tcp_client.cc 
-    ${SRC_ECHO_MSG_PROTO} ${HDR_ECHO_MSG_PROTO})
+    ${SRC_ECHO_MSG_PROTO} ${HDR_ECHO_MSG_PROTO} ${ECHO_APPS_DIR}/protobuf.cc)
 set(UDP_ECHO_SERVER_SOURCES ${ECHO_APPS_DIR}/dmtr_udp_server.cc)
 set(UDP_ECHO_CLIENT_SOURCES ${ECHO_APPS_DIR}/dmtr_udp_client.cc)
 set(RAW_ECHO_SERVER_SOURCES ${ECHO_APPS_DIR}/posix_tcp_server.cc)
