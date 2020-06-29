@@ -1,44 +1,44 @@
-syntax = "proto2";
+syntax = "proto3";
 package stress;
 
 // simplest message that can be made arbitrarily large
 message GetMessage {
-    required string key = 1;
+    string key = 1;
 }
 
 // simple message that can be made arbitrarily large
 // by making the strings arbitrarily large
 message PutMessage {
-    required string key = 1;
-    required string value = 2;
+    string key = 1;
+    string value = 2;
 }
 
 // two leaves
 message Msg1L {
-    required GetMessage left = 1;
-    required GetMessage right = 2;
+    GetMessage left = 1;
+    GetMessage right = 2;
 }
 
 // triple nested (four leaves)
 message Msg2L {
-    required Msg1L left = 1;
-    required Msg1L right = 2;
+    Msg1L left = 1;
+    Msg1L right = 2;
 }
 
 // eight leaves
 message Msg3L {
-    required Msg2L left = 1;
-    required Msg2L right = 2; 
+    Msg2L left = 1;
+    Msg2L right = 2; 
 }
 
 // 16 leaves
 message Msg4L {
-    required Msg3L left = 1;
-    required Msg3L right = 2;
+    Msg3L left = 1;
+    Msg3L right = 2;
 }
 
 // 32 leaves
 message Msg5L {
-    required Msg4L left = 1;
-    required Msg4L right = 2;
+    Msg4L left = 1;
+    Msg4L right = 2;
 }
