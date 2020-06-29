@@ -12,7 +12,8 @@
 
 dmtr::timer_queue::timer_queue(int qd) :
     io_queue(TIMER_Q, qd),
-    my_timer(timer())
+    my_timer(timer()),
+    my_good_flag(true)
 {
 }
 

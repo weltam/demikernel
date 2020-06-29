@@ -8,7 +8,7 @@
 #include <dmtr/types.h>
 
 #include <stdio.h>
-#include <chrono>
+#include <boost/chrono.hpp>
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -42,7 +42,7 @@ DMTR_EXPORT int dmtr_pop2(dmtr_qtoken_t *qt_out, int qd, size_t count);
 DMTR_EXPORT int dmtr_lseek(int qd, off_t offset, int whence);
 
 DMTR_EXPORT int dmtr_push_tick(
-        dmtr_qtoken_t *qtok_out, int qd, std::chrono::nanoseconds timeout);
+        dmtr_qtoken_t *qtok_out, int qd, boost::chrono::nanoseconds timeout);
 
 DMTR_EXPORT int dmtr_poll(dmtr_qresult_t *qr_out, dmtr_qtoken_t qt);
 DMTR_EXPORT int dmtr_drop(dmtr_qtoken_t qt);

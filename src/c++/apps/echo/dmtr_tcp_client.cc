@@ -6,6 +6,7 @@
 #include <arpa/inet.h>
 #include <boost/chrono.hpp>
 #include <boost/optional.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/parsers.hpp>
 #include <boost/program_options/variables_map.hpp>
@@ -27,6 +28,7 @@ namespace po = boost::program_options;
 uint64_t sent = 0, recved = 0;
 dmtr_latency_t *latency = NULL;
 int qd;
+int timer_qd;
 dmtr_sgarray_t sga = {};
 //#define TRAILING_REQUESTS 
 //#define WAIT_FOR_ALL
@@ -53,7 +55,9 @@ int main(int argc, char *argv[]) {
 
     DMTR_OK(dmtr_socket(&qd, AF_INET, SOCK_STREAM, 0));
     printf("client qd:\t%d\n", qd);
-    
+
+    DMTR_OK(dmtr_new_timer(&timer_qd));
+        
     struct sockaddr_in saddr = {};
     saddr.sin_family = AF_INET;
     const char *server_ip = boost::get(server_ip_addr).c_str();
@@ -65,11 +69,14 @@ int main(int argc, char *argv[]) {
 
     std::cerr << "Attempting to connect to `" << boost::get(server_ip_addr) << ":" << port << "`..." << std::endl;
     dmtr_qtoken_t q;
+    dmtr_qtoken_t timer_q_push;
+    dmtr_qtoken_t timer_q_pop;
     DMTR_OK(dmtr_connect(&q, qd, reinterpret_cast<struct sockaddr *>(&saddr), sizeof(saddr)));
 
     dmtr_qresult_t qr = {};
     DMTR_OK(dmtr_wait(&qr, q));
     std::cerr << "Connected." << std::endl;
+
 
     // if not running protobuf test, send normal aaaa
     if (!run_protobuf_test) {
@@ -91,7 +98,7 @@ int main(int argc, char *argv[]) {
     // set up our signal handlers
     if (signal(SIGINT, sig_handler) == SIG_ERR)
         std::cout << "\ncan't catch SIGINT\n";
-    
+ 
     // start all the clients
     for (uint32_t c = 0; c < clients; c++) {
         // push message to server
@@ -105,6 +112,15 @@ int main(int argc, char *argv[]) {
     
     int ret;
     dmtr_qresult_t wait_out;
+    
+    // test the timer
+    std::cout << "Testing the timer" << std::endl;
+    boost::chrono::nanoseconds expiry { 3000000000 };
+    DMTR_OK(dmtr_push_tick(&timer_q_push, timer_qd, expiry));
+    DMTR_OK(dmtr_pop(&timer_q_pop, timer_qd));
+    DMTR_OK(dmtr_wait(&wait_out, timer_q_pop));
+    std::cout << "Wait over" << std::endl;
+
     //iterations *= clients;
     do {
 #ifdef WAIT_FOR_ALL
