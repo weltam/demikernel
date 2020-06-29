@@ -129,6 +129,13 @@ Latency_Sum(dmtr_latency_t *dest, dmtr_latency_t *summand)
 }
 
 static char *
+LatencyFmtNSFull(uint64_t ns, char *buf)
+{
+    sprintf(buf, "%lu ns", ns); 
+    return buf;
+}
+
+static char *
 LatencyFmtNS(uint64_t ns, char *buf)
 {
     static const char *units[] = {"ns", "us", "ms", "s"};
@@ -186,19 +193,19 @@ Latency_Dump(FILE *f, dmtr_latency_t *l)
         if (type == '=')
             extra[0] = '\0';
         fprintf(f, "LATENCY %s%s: %s %s/%s %s (%lu samples, %s total)\n",
-                l->name.c_str(), extra, LatencyFmtNS(d->min, buf[0]),
-                LatencyFmtNS(d->total / d->count, buf[1]),
-                LatencyFmtNS((uint64_t)1 << medianBucket, buf[2]),
-                LatencyFmtNS(d->max, buf[3]), d->count,
-                LatencyFmtNS(d->total, buf[4]));
+                l->name.c_str(), extra, LatencyFmtNSFull(d->min, buf[0]),
+                LatencyFmtNSFull(d->total / d->count, buf[1]),
+                LatencyFmtNSFull((uint64_t)1 << medianBucket, buf[2]),
+                LatencyFmtNSFull(d->max, buf[3]), d->count,
+                LatencyFmtNSFull(d->total, buf[4]));
     }
     *ppnext = -1;
     l->latencies.shrink_to_fit();
     sort(l->latencies.begin(), l->latencies.end());
     fprintf(f, "TAIL LATENCY 99=%s 99.9=%s 99.99=%s\n",
-	    LatencyFmtNS(l->latencies.at((int)((float)l->latencies.size() * 0.99)), buf[0]),
-	    LatencyFmtNS(l->latencies.at((int)((float)l->latencies.size() * 0.999)), buf[1]),
-	    LatencyFmtNS(l->latencies.at((int)((float)l->latencies.size() * 0.9999)), buf[2]));
+	    LatencyFmtNSFull(l->latencies.at((int)((float)l->latencies.size() * 0.99)), buf[0]),
+	    LatencyFmtNSFull(l->latencies.at((int)((float)l->latencies.size() * 0.999)), buf[1]),
+	    LatencyFmtNSFull(l->latencies.at((int)((float)l->latencies.size() * 0.9999)), buf[2]));
 
     // Find the count of the largest bucket so we can scale the
     // histogram
