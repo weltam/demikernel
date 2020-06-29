@@ -8,6 +8,7 @@
 #include <dmtr/annot.h>
 #include <dmtr/libos.h>
 #include <dmtr/libos/memory_queue.hh>
+#include <dmtr/libos/timer_queue.hh>
 #include <dmtr/libos/io_queue_api.hh>
 
 #include <memory>
@@ -25,6 +26,7 @@ int dmtr_init(int argc, char *argv[])
     ioq_api = std::unique_ptr<dmtr::io_queue_api>(p);
     ioq_api->register_queue_ctor(dmtr::io_queue::MEMORY_Q, dmtr::memory_queue::new_object);
     ioq_api->register_queue_ctor(dmtr::io_queue::NETWORK_Q, dmtr::lwip_queue::new_object);
+    ioq_api->register_queue_ctor(dmtr::io_queue::TIMER_Q, dmtr::timer_queue::new_object);
     return 0;
 }
 
@@ -98,6 +100,14 @@ int dmtr_open2(int *qd_out, const char *pathname, int flags, mode_t mode)
     return ioq_api->open2(*qd_out, pathname, flags, mode);
 }
 
+int dmtr_new_timer(int *qd_out)
+{
+    DMTR_NOTNULL(EINVAL, qd_out);
+    DMTR_NOTNULL(EPERM, ioq_api.get());
+    
+    return ioq_api->new_timer(*qd_out);
+}
+
 int dmtr_creat(int *qd_out, const char *pathname, mode_t mode)
 {
     DMTR_NOTNULL(EINVAL, qd_out);
@@ -157,4 +167,11 @@ int dmtr_drop(dmtr_qtoken_t qt)
     DMTR_NOTNULL(EINVAL, ioq_api.get());
 
     return ioq_api->drop(qt);
+}
+
+int dmtr_push_tick(dmtr_qtoken_t *qtok_out, int qd, const boost::chrono::nanoseconds timeout) {
+    DMTR_NOTNULL(EINVAL, qtok_out);
+    DMTR_NOTNULL(EINVAL, ioq_api.get());
+
+    return ioq_api->push_tick(*qtok_out, qd, timeout);
 }

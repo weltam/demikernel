@@ -7,15 +7,31 @@
 #include <dmtr/annot.h>
 #include <fcntl.h>
 #include <sstream>
+#include <boost/chrono.hpp>
+dmtr::io_queue::timer::timer() :
+    expiry(boost::chrono::high_resolution_clock::now())
+{}
 
+int dmtr::io_queue::timer::set_expiry(boost::chrono::nanoseconds timeout) {
+    expiry = boost::chrono::high_resolution_clock::now() + timeout;
+    return 0;
+}
 
+bool dmtr::io_queue::timer::has_expired() {
+    if (boost::chrono::high_resolution_clock::now() >= expiry) {
+        return true;
+    } else {
+        return false;
+    }
+}
 
 dmtr::io_queue::task::task() :
     valid(false),
     my_qr{},
     my_error(EAGAIN),
     my_sga_arg{},
-    my_queue_arg(nullptr)
+    my_queue_arg(nullptr),
+    my_expiry_arg{}
 {}
 
 int dmtr::io_queue::task::initialize(io_queue &q,  dmtr_qtoken_t qt, dmtr_opcode_t opcode) {
@@ -42,6 +58,12 @@ int dmtr::io_queue::task::initialize(io_queue &q, dmtr_qtoken_t qt, dmtr_opcode_
     DMTR_NOTNULL(EINVAL, arg);
     DMTR_OK(initialize(q, qt, opcode));
     my_queue_arg = arg;
+    return 0;
+}
+
+int dmtr::io_queue::task::initialize(io_queue &q, dmtr_qtoken_t qt, dmtr_opcode_t opcode, const boost::chrono::nanoseconds arg) {
+    DMTR_OK(initialize(q, qt, opcode));
+    my_expiry_arg = arg;
     return 0;
 }
 
@@ -79,6 +101,12 @@ bool dmtr::io_queue::task::arg(io_queue *&arg_out) const {
     }
 
     arg_out = my_queue_arg;
+    return true;
+}
+
+bool dmtr::io_queue::task::arg(const boost::chrono::nanoseconds *&arg_out) const {
+
+    arg_out = &my_expiry_arg;
     return true;
 }
 
@@ -133,6 +161,11 @@ int dmtr::io_queue::open2(const char *pathname, int flags, mode_t mode) {
 }
 
 int dmtr::io_queue::creat(const char *pathname, mode_t mode) {
+    return ENOTSUP;
+}
+
+
+int dmtr::io_queue::push_tick(dmtr_qtoken_t qt, const boost::chrono::nanoseconds expiry) {
     return ENOTSUP;
 }
 
@@ -198,6 +231,13 @@ int dmtr::io_queue::new_task(dmtr_qtoken_t qt, dmtr_opcode_t opcode, const dmtr_
 }
 
 int dmtr::io_queue::new_task(dmtr_qtoken_t qt, dmtr_opcode_t opcode, io_queue *arg) {
+    DMTR_TRUE(EEXIST, !has_task(qt));
+    insert_task(qt);
+    DMTR_OK(get_task(qt)->initialize(*this, qt, opcode, arg));
+    return 0;
+}
+
+int dmtr::io_queue::new_task(dmtr_qtoken_t qt, dmtr_opcode_t opcode, const boost::chrono::nanoseconds arg) {
     DMTR_TRUE(EEXIST, !has_task(qt));
     insert_task(qt);
     DMTR_OK(get_task(qt)->initialize(*this, qt, opcode, arg));

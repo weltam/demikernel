@@ -214,6 +214,16 @@ int dmtr::io_queue_api::open2(int &qd_out, const char *pathname, int flags, mode
     return 0;
 }
 
+int dmtr::io_queue_api::new_timer(int &qd_out) {
+    qd_out = 0;
+
+    io_queue *q = NULL;
+    DMTR_OK(new_queue(q, io_queue::TIMER_Q));
+
+    qd_out = q->qd();
+    return 0;
+}
+
 int dmtr::io_queue_api::creat(int &qd_out, const char *pathname, mode_t mode) {
     qd_out = 0;
 
@@ -271,6 +281,20 @@ int dmtr::io_queue_api::push(dmtr_qtoken_t &qtok_out, int qd, const dmtr_sgarray
     //printf("push: allocate a new q token: %lu %lu\n",qt, qt%MAX_TASKS);
      //printf("push: done allocating\n");
     DMTR_OK(q->push(qt, sga));
+
+    qtok_out = qt;
+    return 0;
+}
+
+int dmtr::io_queue_api::push_tick(dmtr_qtoken_t &qtok_out, int qd, const boost::chrono::nanoseconds expiry) {
+    qtok_out = 0;
+    DMTR_TRUE(EINVAL, qd != 0);
+
+    io_queue *q = NULL;
+    DMTR_OK(get_queue(q, qd));
+    dmtr_qtoken_t qt;
+    DMTR_OK(q->new_qtoken(qt));
+    DMTR_OK(q->push_tick(qt, expiry));
 
     qtok_out = qt;
     return 0;
