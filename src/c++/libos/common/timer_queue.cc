@@ -78,15 +78,16 @@ int dmtr::timer_queue::pop_thread(task::thread_type::yield_type &yield, task::th
             yield();
         }
 
-        while (!(my_timer.has_expired())) {
-            yield();
-        }
 
         auto qt = tq.front();
         tq.pop();
         task *t;
         DMTR_OK(get_task(t, qt));
-
+        
+        while (!(my_timer.has_expired())) {
+            yield();
+        }
+    
         DMTR_OK(t->complete(0));
     }
 

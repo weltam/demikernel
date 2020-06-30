@@ -48,7 +48,6 @@ void sig_handler(int signo)
 
 int main(int argc, char *argv[]) {
     parse_args(argc, argv, false);
-    
     DMTR_OK(dmtr_init(argc, argv));
 
     DMTR_OK(dmtr_new_latency(&latency, "end-to-end"));
@@ -56,6 +55,7 @@ int main(int argc, char *argv[]) {
     DMTR_OK(dmtr_socket(&qd, AF_INET, SOCK_STREAM, 0));
     printf("client qd:\t%d\n", qd);
 
+    // used for retries
     DMTR_OK(dmtr_new_timer(&timer_qd));
         
     struct sockaddr_in saddr = {};
@@ -69,8 +69,6 @@ int main(int argc, char *argv[]) {
 
     std::cerr << "Attempting to connect to `" << boost::get(server_ip_addr) << ":" << port << "`..." << std::endl;
     dmtr_qtoken_t q;
-    dmtr_qtoken_t timer_q_push;
-    dmtr_qtoken_t timer_q_pop;
     DMTR_OK(dmtr_connect(&q, qd, reinterpret_cast<struct sockaddr *>(&saddr), sizeof(saddr)));
 
     dmtr_qresult_t qr = {};
@@ -88,11 +86,121 @@ int main(int argc, char *argv[]) {
         sga.sga_numsegs = 1;
         generate_protobuf_packet(sga, protobuf, packet_size);
     }
-    
+
+    // run a simpler test with retries turned on
+    if (retries) {
+        if (clients > 1) {
+            std::cout << "Retries don't work with multiple clients." << std::endl;
+            exit(1);
+        }
+
+        int ret;
+        int num_retries = 0;
+        dmtr_qresult_t wait_out;
+        dmtr_qtoken_t push_token;
+        dmtr_qtoken_t pop_token;
+        dmtr_qtoken_t timer_q_push;
+        dmtr_qtoken_t timer_q_pop;
+        std::vector<dmtr_qtoken_t> tokens;
+        // timeout is 100 us
+        boost::chrono::nanoseconds timeout { 100000 };
+
+        boost::chrono::time_point<boost::chrono::steady_clock> start_time;
+        // set up our signal handlers
+        if (signal(SIGINT, sig_handler) == SIG_ERR)
+            std::cout << "\ncan't catch SIGINT\n";
+
+        // first async push and pop
+        DMTR_OK(dmtr_push(&push_token, qd, &sga));
+        sent++;
+        DMTR_OK(dmtr_pop(&pop_token, qd));
+        start_time = boost::chrono::steady_clock::now();
+        tokens.push_back(pop_token);
+        // set timeout
+        DMTR_OK(dmtr_push_tick(&timer_q_push, timer_qd, timeout));
+        DMTR_OK(dmtr_pop(&timer_q_pop, timer_qd));
+        tokens.push_back(timer_q_pop);
+        int idx = 0;
+
+        do {
+            // wait for a returned value
+            ret =  dmtr_wait_any(&wait_out, &idx, tokens.data(), 2);
+            auto dt = boost::chrono::steady_clock::now() - start_time;
+           
+            // need to send a retry 
+            if (wait_out.qr_qd == timer_qd) {
+                num_retries++;
+                // cleanup from timer
+                tokens.erase(tokens.begin() + 1);
+                //DMTR_OK(dmtr_sgafree(&wait_out.qr_value.sga));
+                // drop the push token from this echo
+                if (push_token != 0) {
+                    DMTR_OK(dmtr_drop(push_token));
+                    push_token = 0;
+                }
+                // drop timer push token from this echo
+                if (timer_q_push != 0) {
+                    DMTR_OK(dmtr_drop(timer_q_push));
+                    timer_q_push = 0;
+                }
+                // send a new packet and reset timer
+                DMTR_OK(dmtr_push(&push_token, qd, &sga));
+                
+                // set timeout
+                DMTR_OK(dmtr_push_tick(&timer_q_push, timer_qd, timeout));
+                DMTR_OK(dmtr_pop(&timer_q_pop, timer_qd));
+                start_time = boost::chrono::steady_clock::now();
+                tokens.push_back(timer_q_pop);
+                continue;
+            } else {
+                 
+                DMTR_OK(dmtr_record_latency(latency, dt.count()));
+                recved++;
+                iterations--;
+
+                // finished a full echo
+                // free the allocated sga
+                DMTR_OK(dmtr_sgafree(&wait_out.qr_value.sga));
+                // drop the push token from this echo
+                if (push_token != 0) {
+                    DMTR_OK(dmtr_drop(push_token));
+                    push_token = 0;
+                }
+                // drop timer token from this echo
+                if (timer_q_push != 0) {
+                    DMTR_OK(dmtr_drop(timer_q_push));
+                    timer_q_push = 0;
+                }
+
+                /*if (timer_q_pop != 0) {
+                    DMTR_OK(dmtr_drop(timer_q_pop));
+                    timer_q_pop = 0;
+                }*/
+
+                
+                // send a new packet and reset timer
+                DMTR_OK(dmtr_push(&push_token, qd, &sga));
+                sent++;
+                DMTR_OK(dmtr_pop(&pop_token, qd));
+                start_time = boost::chrono::steady_clock::now();
+                tokens.clear();
+                tokens.push_back(pop_token) 
+                // set timeout
+                DMTR_OK(dmtr_push_tick(&timer_q_push, timer_qd, timeout));
+                //DMTR_OK(dmtr_pop(&timer_q_pop, timer_qd));
+                tokens.push_back(timer_q_pop);
+            }    
+        } while (iterations > 0 && ret == 0);
+        std::cout << "Final num retries: " << num_retries << std::endl;
+        finish();
+        exit(0);
+        
+    } 
+
     std::cerr << "Number of clients: " << clients << std::endl;
 
     dmtr_qtoken_t push_tokens[clients];
-    dmtr_qtoken_t pop_tokens[clients];    
+    dmtr_qtoken_t pop_tokens[clients];
     boost::chrono::time_point<boost::chrono::steady_clock> start_times[clients];
 
     // set up our signal handlers
@@ -113,14 +221,6 @@ int main(int argc, char *argv[]) {
     int ret;
     dmtr_qresult_t wait_out;
     
-    // test the timer
-    std::cout << "Testing the timer" << std::endl;
-    boost::chrono::nanoseconds expiry { 3000000000 };
-    DMTR_OK(dmtr_push_tick(&timer_q_push, timer_qd, expiry));
-    DMTR_OK(dmtr_pop(&timer_q_pop, timer_qd));
-    DMTR_OK(dmtr_wait(&wait_out, timer_q_pop));
-    std::cout << "Wait over" << std::endl;
-
     //iterations *= clients;
     do {
 #ifdef WAIT_FOR_ALL

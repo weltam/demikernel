@@ -17,6 +17,7 @@ boost::optional<std::string> server_ip_addr;
 uint32_t packet_size = 64;
 uint32_t iterations = 10;
 uint32_t clients = 1;
+bool retries = false;
 const char FILL_CHAR = 'a';
 boost::optional<std::string> file;
 boost::optional<std::string> protobuf_opt;
@@ -38,7 +39,9 @@ void parse_args(int argc, char **argv, bool server)
         ("clients,c", value<uint32_t>(&clients)->default_value(1), "clients")
         ("config-path,r", value<std::string>(&config_path)->default_value("./config.yaml"), "specify configuration file")
         ("file", value<std::string>(), "log file")
-        ("protobuf", value<std::string>(), "protobuf data type to test");
+        ("protobuf", value<std::string>(), "protobuf data type to test")
+        ("retry", "run client with retries");
+
 
     variables_map vm;
     store(parse_command_line(argc, argv, desc), vm);
@@ -112,6 +115,11 @@ void parse_args(int argc, char **argv, bool server)
             std::cout << "Setting run protobuf test to true with: " << protobuf << std::endl;
             run_protobuf_test = true;
         }
+    }
+
+    if (vm.count("retry")) {
+        std::cout << "Running with retries turned on; iterations are " << iterations << std::endl;
+        retries = true;
     }
 };
 

@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <sstream>
 #include <boost/chrono.hpp>
+
 dmtr::io_queue::timer::timer() :
     expiry(boost::chrono::high_resolution_clock::now())
 {}
