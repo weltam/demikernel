@@ -2,6 +2,9 @@
 // Licensed under the MIT license.
 
 #include "common.hh"
+#include "message.hh"
+#include "capnproto.hh"
+#include "flatbuffers.hh"
 #include "protobuf.hh"
 #include <arpa/inet.h>
 #include <boost/chrono.hpp>
@@ -22,6 +25,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <unordered_map>
+#include <stdio.h>
+#include <string.h>
+
 
 //#define DMTR_PROFILE
 // #define OPEN2
@@ -30,6 +36,7 @@ int lqd = 0;
 int fqd = 0;
 uint64_t sent = 0;
 uint64_t recved = 0;
+echo_message *echo = NULL;
 
 #ifdef DMTR_PROFILE
 dmtr_latency_t *pop_latency = NULL;
@@ -65,6 +72,11 @@ int main(int argc, char *argv[])
 {
     // grab commandline args
     parse_args(argc, argv, true);
+
+    // setup protobuf, capn proto and flatbuffers data structures
+    protobuf_echo proto_data(packet_size, message);
+    flatbuffers_echo flatbuffers_data(packet_size, message);
+    capnproto_echo capnproto_data(packet_size, message);
 
     // set up server socket address
     struct sockaddr_in saddr = {};
@@ -120,6 +132,21 @@ int main(int argc, char *argv[])
     if (signal(SIGINT, sig_handler) == SIG_ERR)
         std::cout << "\ncan't catch SIGINT\n";
 
+    // initialize serialized data structure that will be sent back
+    if (!run_protobuf_test) {
+        // todo: maybe do something here
+    } else if (!std::strcmp(cereal_system.c_str(), "protobuf")) {
+        std::cout << "Init'ing protobuf server side" << std::endl;
+        echo = &proto_data;
+    } else if (!std::strcmp(cereal_system.c_str(), "capnproto")) {
+        echo = &capnproto_data;
+    } else if (!std::strcmp(cereal_system.c_str(), "flatbuffers")) {
+        echo = &flatbuffers_data;
+    } else {
+        std::cerr << "Serialization cereal_system " << cereal_system  << " unknown." << std::endl;
+        exit(1);
+    }
+
     
 #ifdef DMTR_OPEN2
     // open file if we are a logging server
@@ -160,8 +187,8 @@ int main(int argc, char *argv[])
                 auto start = boost::chrono::steady_clock::now();
 #endif
                 if (run_protobuf_test) {
-                    // de-serialize the message
-                    decode_serialized_msg(wait_out.qr_value.sga);
+                    // deserialize the message from the buffer
+                    echo->deserialize_message(wait_out.qr_value.sga);
 #ifdef DMTR_PROFILE
                     auto deserialize_time = boost::chrono::steady_clock::now() - start;
                     DMTR_OK(dmtr_record_latency(deserialize_latency, deserialize_time.count()));
@@ -201,13 +228,13 @@ int main(int argc, char *argv[])
                     popped_buffers[idx] = wait_out.qr_value.sga;
                 }
                 push_tokens[idx] = 0;
-                // push back to client
-                // re-serialize the msg
+                
+                // reserialize the message to send back into the array
                 if (run_protobuf_test) {
 #ifdef DMTR_PROFILE
                     auto start_serialize = boost::chrono::steady_clock::now();
 #endif
-                    generate_protobuf_packet(wait_out.qr_value.sga, protobuf, packet_size); 
+                    echo->serialize_message(wait_out.qr_value.sga);
 #ifdef DMTR_PROFILE
                     auto end_serialize = boost::chrono::steady_clock::now();
                     auto serialize_time = end_serialize - start_serialize;

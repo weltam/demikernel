@@ -1,0 +1,35 @@
+namespace stress;
+
+table GetMessageFB {
+    key:string;
+}
+
+table PutMessageFB {
+    key:string;
+    value:string;
+}
+
+table Msg1LFB {
+    left:[GetMessageFB];
+    right:[GetMessageFB];
+}
+
+table Msg2LFB {
+    left:[Msg1LFB];
+    right:[Msg1LFB];
+}
+
+table Msg3LFB {
+    left:[Msg2LFB];
+    right:[Msg2LFB];
+}
+
+table Msg4LFB {
+    left:[Msg3LFB];
+    right:[Msg3LFB];
+}
+
+table Msg5LFB {
+    left:[Msg5LFB];
+    right:[Msg5LFB];
+}

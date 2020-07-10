@@ -7,10 +7,13 @@
 #include <boost/optional.hpp>
 #include <boost/program_options.hpp>
 #include <dmtr/annot.h>
+#include <dmtr/types.h>
 #include <iostream>
 #include <dmtr/libos/mem.h>
 #include <string.h>
 #include <yaml-cpp/yaml.h>
+#include <cstring>
+#include <stdio.h>
 
 uint16_t port = 12345;
 boost::optional<std::string> server_ip_addr;
@@ -20,8 +23,8 @@ uint32_t clients = 1;
 bool retries = false;
 const char FILL_CHAR = 'a';
 boost::optional<std::string> file;
-boost::optional<std::string> protobuf_opt;
-std::string protobuf = std::string("none");
+std::string cereal_system = std::string("none");
+std::string message = std::string("none");
 bool run_protobuf_test = false;
 
 using namespace boost::program_options;
@@ -39,7 +42,8 @@ void parse_args(int argc, char **argv, bool server)
         ("clients,c", value<uint32_t>(&clients)->default_value(1), "clients")
         ("config-path,r", value<std::string>(&config_path)->default_value("./config.yaml"), "specify configuration file")
         ("file", value<std::string>(), "log file")
-        ("protobuf", value<std::string>(), "protobuf data type to test")
+        ("system", value<std::string>(&cereal_system)->default_value("none"), "serialization method to test")
+        ("message", value<std::string>(), "message type to test")
         ("retry", "run client with retries");
 
 
@@ -108,19 +112,24 @@ void parse_args(int argc, char **argv, bool server)
         file = vm["file"].as<std::string>();
     }
 
-    if (vm.count("protobuf")) {
-        protobuf_opt = vm["protobuf"].as<std::string>();
-        if (boost::none != protobuf_opt) {
-            protobuf = boost::get(protobuf_opt).c_str();
-            std::cout << "Setting run protobuf test to true with: " << protobuf << std::endl;
+    if (vm.count("system")) {
+        cereal_system = vm["system"].as<std::string>();
+        if (std::strcmp(cereal_system.c_str(), "none")) {
+            std::cout << "Setting run_protobuf_test true" << std::endl;
             run_protobuf_test = true;
         }
+    }
+
+    if (vm.count("message")) {
+        message = vm["message"].as<std::string>();
     }
 
     if (vm.count("retry")) {
         std::cout << "Running with retries turned on; iterations are " << iterations << std::endl;
         retries = true;
     }
+
+    std::cout << "system: " << cereal_system << ", message: " << message << std::endl;
 };
 
 void* generate_packet()
@@ -132,4 +141,8 @@ void* generate_packet()
     s[packet_size - 1] = '\0';
     return p;
 };
+
+void read_packet(dmtr_sgarray_t &sga, uint32_t field_size) {
+    std::string data((char*)sga.sga_segs[0].sgaseg_buf, sga.sga_segs[0].sgaseg_len);
+}
 #endif

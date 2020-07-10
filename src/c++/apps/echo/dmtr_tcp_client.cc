@@ -2,7 +2,10 @@
 // Licensed under the MIT license.
 
 #include "common.hh"
+#include "capnproto.hh"
+#include "flatbuffers.hh"
 #include "protobuf.hh"
+#include "message.hh"
 #include <arpa/inet.h>
 #include <boost/chrono.hpp>
 #include <boost/optional.hpp>
@@ -22,14 +25,17 @@
 #include <unistd.h>
 #include <yaml-cpp/yaml.h>
 #include <signal.h>
+#include <stdio.h>
+#include <string.h>
+
 //#define DMTR_PROFILE
 
 namespace po = boost::program_options;
 uint64_t sent = 0, recved = 0;
 dmtr_latency_t *latency = NULL;
 int qd;
-int timer_qd;
 dmtr_sgarray_t sga = {};
+echo_message *echo = NULL;
 //#define TRAILING_REQUESTS 
 //#define WAIT_FOR_ALL
 void finish() {
@@ -55,8 +61,6 @@ int main(int argc, char *argv[]) {
     DMTR_OK(dmtr_socket(&qd, AF_INET, SOCK_STREAM, 0));
     printf("client qd:\t%d\n", qd);
 
-    // used for retries
-    DMTR_OK(dmtr_new_timer(&timer_qd));
         
     struct sockaddr_in saddr = {};
     saddr.sin_family = AF_INET;
@@ -76,85 +80,118 @@ int main(int argc, char *argv[]) {
     std::cerr << "Connected." << std::endl;
 
 
-    // if not running protobuf test, send normal aaaa
+    // init serialization messages so variables aren't freed prematurely
+    protobuf_echo protobuf_data(packet_size, message);
+    capnproto_echo capnproto_data(packet_size, message);
+    flatbuffers_echo flatbuffers_data(packet_size, message);
+   
+    // if not running serialization test, send normal "aaaaa";
     if (!run_protobuf_test) {
         sga.sga_numsegs = 1;
         sga.sga_segs[0].sgaseg_len = packet_size;
         sga.sga_segs[0].sgaseg_buf = generate_packet();
+    } else if (!std::strcmp(cereal_system.c_str(), "protobuf")) {
+        echo = &protobuf_data;
+        echo->serialize_message(sga);
+    } else if (!std::strcmp(cereal_system.c_str(), "capnproto")) {
+        echo = &capnproto_data;
+        echo->serialize_message(sga);
+    } else if (!std::strcmp(cereal_system.c_str(), "flatbuffers")) {
+        echo = &flatbuffers_data;
+        echo->serialize_message(sga);
     } else {
-        init_protobuf(protobuf, packet_size);
-        sga.sga_numsegs = 1;
-        generate_protobuf_packet(sga, protobuf, packet_size);
+        std::cerr << "Serialization cereal_system " << cereal_system << " unknown." << std::endl;
+        exit(1);
     }
 
     // run a simpler test with retries turned on
     if (retries) {
-        if (clients > 1) {
-            std::cout << "Retries don't work with multiple clients." << std::endl;
-            exit(1);
+        // one more iteration: don't count first
+        iterations += 1;
+        // set up timers for each client
+        int timer_qds[clients];
+
+        for (uint32_t c = 0; c < clients; c++) {
+            DMTR_OK(dmtr_new_timer(&timer_qds[c]));
         }
 
         int ret;
         int num_retries = 0;
         dmtr_qresult_t wait_out;
-        dmtr_qtoken_t push_token;
-        dmtr_qtoken_t pop_token;
-        dmtr_qtoken_t timer_q_push;
-        dmtr_qtoken_t timer_q_pop;
-        std::vector<dmtr_qtoken_t> tokens;
+        dmtr_qtoken_t push_tokens[clients];
+        dmtr_qtoken_t pop_tokens[clients*2];
+        dmtr_qtoken_t timer_q_push[clients];
         // timeout is 100 us
-        boost::chrono::nanoseconds timeout { 100000 };
+        boost::chrono::nanoseconds timeout { 200000 };
 
-        boost::chrono::time_point<boost::chrono::steady_clock> start_time;
+        boost::chrono::time_point<boost::chrono::steady_clock> start_times[clients];
+        boost::chrono::time_point<boost::chrono::steady_clock> timer_times[clients];
+        
         // set up our signal handlers
         if (signal(SIGINT, sig_handler) == SIG_ERR)
             std::cout << "\ncan't catch SIGINT\n";
 
-        // first async push and pop
-        DMTR_OK(dmtr_push(&push_token, qd, &sga));
-        sent++;
-        DMTR_OK(dmtr_pop(&pop_token, qd));
-        start_time = boost::chrono::steady_clock::now();
-        tokens.push_back(pop_token);
-        // set timeout
-        DMTR_OK(dmtr_push_tick(&timer_q_push, timer_qd, timeout));
-        DMTR_OK(dmtr_pop(&timer_q_pop, timer_qd));
-        tokens.push_back(timer_q_pop);
+        // start all the clients
+        for (uint32_t c = 0; c < clients; c++) {
+            // first push and pop
+            DMTR_OK(dmtr_push(&push_tokens[c], qd, &sga));
+            sent++;
+            DMTR_OK(dmtr_pop(&pop_tokens[2*c], qd));
+            start_times[c] = boost::chrono::steady_clock::now();
+            
+            // reset for this client
+            DMTR_OK(dmtr_push_tick(&timer_q_push[c], timer_qds[c], timeout));
+            timer_times[c] = boost::chrono::steady_clock::now();
+            DMTR_OK(dmtr_pop(&pop_tokens[2*c+1], timer_qds[c]));
+        } 
+
         int idx = 0;
 
         do {
             // wait for a returned value
-            ret =  dmtr_wait_any(&wait_out, &idx, tokens.data(), 2);
-            auto dt = boost::chrono::steady_clock::now() - start_time;
-           
-            // need to send a retry 
-            if (wait_out.qr_qd == timer_qd) {
-                num_retries++;
-                // cleanup from timer
-                tokens.erase(tokens.begin() + 1);
-                //DMTR_OK(dmtr_sgafree(&wait_out.qr_value.sga));
-                // drop the push token from this echo
-                if (push_token != 0) {
-                    DMTR_OK(dmtr_drop(push_token));
-                    push_token = 0;
-                }
-                // drop timer push token from this echo
-                if (timer_q_push != 0) {
-                    DMTR_OK(dmtr_drop(timer_q_push));
-                    timer_q_push = 0;
-                }
-                // send a new packet and reset timer
-                DMTR_OK(dmtr_push(&push_token, qd, &sga));
+            ret =  dmtr_wait_any(&wait_out, &idx, pop_tokens, clients*2);
+
+            // one of clients timed out
+            if (idx % 2 != 0) {
+                // client idx corresponding to timer idx
+                uint32_t c = (idx - 1)/2;
+
+                // first packet takes longer
+                if (recved != 0) {
+                    // actual retry
+                    num_retries++;
+
+                    // count time since timer fire
+                    auto dt = boost::chrono::steady_clock::now() - timer_times[c];
+                    auto sent_dt = boost::chrono::steady_clock::now() - start_times[c];
+                    std::cout << "Idx " << idx << " fired after " << dt.count() << " time, since sent: " << sent_dt.count() << " time, recvd so far: " << recved << std::endl;
+                    // drop the push token from this echo
+                    if (push_tokens[c] != 0) {
+                        DMTR_OK(dmtr_drop(push_tokens[c]));
+                        push_tokens[c] = 0;
+                    }
                 
-                // set timeout
-                DMTR_OK(dmtr_push_tick(&timer_q_push, timer_qd, timeout));
-                DMTR_OK(dmtr_pop(&timer_q_pop, timer_qd));
-                start_time = boost::chrono::steady_clock::now();
-                tokens.push_back(timer_q_pop);
+                    DMTR_OK(dmtr_push(&push_tokens[c], qd, &sga));
+                }
+                
+                // reset the timeout
+                if (timer_q_push[c] != 0) {
+                    DMTR_OK(dmtr_drop(timer_q_push[c]));
+                    timer_q_push[c] = 0;
+                }
+                
+                DMTR_OK(dmtr_push_tick(&timer_q_push[c], timer_qds[c], timeout));
+                timer_times[c] = boost::chrono::steady_clock::now();
+                DMTR_OK(dmtr_pop(&pop_tokens[2*c+1], timer_qds[c]));
+                //start_times[c] = boost::chrono::steady_clock::now();
                 continue;
             } else {
-                 
-                DMTR_OK(dmtr_record_latency(latency, dt.count()));
+                uint32_t c = idx/2;
+                auto dt = boost::chrono::steady_clock::now() - start_times[c];
+                // ping came back
+                if (recved != 0) {
+                    DMTR_OK(dmtr_record_latency(latency, dt.count()));
+                }
                 recved++;
                 iterations--;
 
@@ -162,33 +199,25 @@ int main(int argc, char *argv[]) {
                 // free the allocated sga
                 DMTR_OK(dmtr_sgafree(&wait_out.qr_value.sga));
                 // drop the push token from this echo
-                if (push_token != 0) {
-                    DMTR_OK(dmtr_drop(push_token));
-                    push_token = 0;
+                if (push_tokens[c] != 0) {
+                    DMTR_OK(dmtr_drop(push_tokens[c]));
+                    push_tokens[c] = 0;
                 }
                 // drop timer token from this echo
-                if (timer_q_push != 0) {
-                    DMTR_OK(dmtr_drop(timer_q_push));
-                    timer_q_push = 0;
+                if (timer_q_push[c] != 0) {
+                    DMTR_OK(dmtr_drop(timer_q_push[c]));
+                    timer_q_push[c] = 0;
                 }
 
-                /*if (timer_q_pop != 0) {
-                    DMTR_OK(dmtr_drop(timer_q_pop));
-                    timer_q_pop = 0;
-                }*/
-
-                
                 // send a new packet and reset timer
-                DMTR_OK(dmtr_push(&push_token, qd, &sga));
+                DMTR_OK(dmtr_push(&push_tokens[c], qd, &sga));
                 sent++;
-                DMTR_OK(dmtr_pop(&pop_token, qd));
-                start_time = boost::chrono::steady_clock::now();
-                tokens.clear();
-                tokens.push_back(pop_token) 
+                DMTR_OK(dmtr_pop(&pop_tokens[2*c], qd));
+                start_times[c] = boost::chrono::steady_clock::now();
+                
                 // set timeout
-                DMTR_OK(dmtr_push_tick(&timer_q_push, timer_qd, timeout));
-                //DMTR_OK(dmtr_pop(&timer_q_pop, timer_qd));
-                tokens.push_back(timer_q_pop);
+                DMTR_OK(dmtr_push_tick(&timer_q_push[c], timer_qds[c], timeout));
+                timer_times[c] = boost::chrono::steady_clock::now();
             }    
         } while (iterations > 0 && ret == 0);
         std::cout << "Final num retries: " << num_retries << std::endl;
