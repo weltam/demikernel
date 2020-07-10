@@ -10,16 +10,16 @@
 #include <boost/chrono.hpp>
 
 dmtr::io_queue::timer::timer() :
-    expiry(boost::chrono::high_resolution_clock::now())
+    expiry(boost::chrono::steady_clock::now())
 {}
 
 int dmtr::io_queue::timer::set_expiry(boost::chrono::nanoseconds timeout) {
-    expiry = boost::chrono::high_resolution_clock::now() + timeout;
+    expiry = boost::chrono::steady_clock::now() + timeout;
     return 0;
 }
 
 bool dmtr::io_queue::timer::has_expired() {
-    if (boost::chrono::high_resolution_clock::now() >= expiry) {
+    if (boost::chrono::steady_clock::now() >= expiry) {
         return true;
     } else {
         return false;
