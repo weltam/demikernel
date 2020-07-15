@@ -40,6 +40,18 @@ class flatbuffers_echo : public echo_message
 
     public: void encode_msg(dmtr_sgarray_t &sga, uint8_t* buf, int size);
     public: void handle_msg(uint8_t* buf);
+
+    private: void build_get();
+    private: void build_put();
+    private: void build_msg1L();
+    private: void build_msg2L();
+    private: void build_msg3L();
+    private: void build_msg4L();
+    private: void build_msg5L();
+
 };
+
+template<class T>
+void read_data(uint8_t* buf, const T** ptr);
 
 #endif

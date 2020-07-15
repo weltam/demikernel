@@ -68,17 +68,17 @@ add_dependencies(dmtr-posix-echo  dmtr-posix-server dmtr-posix-client)
 
 # LWIP TCP server
 add_executable(dmtr-lwip-server ${TCP_ECHO_SERVER_SOURCES})
-target_link_libraries(dmtr-lwip-server dmtr-libos-lwip yaml-cpp boost_program_options    ${Protobuf_LIBRARIES})
-add_dependencies(dmtr-lwip-server CapnProto::capnp)
+target_link_libraries(dmtr-lwip-server dmtr-libos-lwip yaml-cpp
+    boost_program_options ${Protobuf_LIBRARIES} CapnProto::capnp)
 
 # LWIP TCP client
 add_executable(dmtr-lwip-client  ${TCP_ECHO_CLIENT_SOURCES})
-target_link_libraries(dmtr-lwip-client dmtr-libos-lwip yaml-cpp boost_program_options ${Protobuf_LIBRARIES})
-add_dependencies(dmtr-lwip-client CapnProto::capnp)
+target_link_libraries(dmtr-lwip-client dmtr-libos-lwip yaml-cpp
+    boost_program_options ${Protobuf_LIBRARIES} CapnProto::capnp)
 
 # LWIP TCP client & server
 add_custom_target(dmtr-lwip-echo)
-add_dependencies(dmtr-lwip-echo dmtr-lwip-server dmtr-lwip-client)
+add_dependencies(dmtr-lwip-echo dmtr-lwip-server dmtr-lwip-client flatc_header)
 
 # LWIP & SPDK client
 add_executable(dmtr-spdk-lwip-client  ${TCP_ECHO_CLIENT_SOURCES})

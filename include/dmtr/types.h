@@ -12,7 +12,7 @@
 extern "C" {
 #endif
 
-#define DMTR_SGARRAY_MAXSIZE 1
+#define DMTR_SGARRAY_MAXSIZE 2
 #define DMTR_HEADER_MAGIC 0x10102010
 #define QD_OFFSET 32ul
     //#define QD_MASK 0xFFFFFFFFul << QD_OFFSET

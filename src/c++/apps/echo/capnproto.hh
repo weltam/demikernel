@@ -3,6 +3,7 @@
 
 #include "stress.capnp.h"
 #include <capnp/message.h>
+#include <capnp/orphan.h>
 #include "message.hh"
 #include <string>
 #include <dmtr/sga.h>
@@ -12,6 +13,7 @@ using namespace std;
 
 class capnproto_echo: public echo_message
 {
+    private: capnp::MallocMessageBuilder builder;
     private: GetMessageCP::Builder getMsg;
     private: PutMessageCP::Builder putMsg;
     private: Msg1LCP::Builder msg1L;
@@ -27,6 +29,15 @@ class capnproto_echo: public echo_message
 
     //public: void encode_msg(dmtr_sgarray_t &sga, kj::ArrayPtr<const kj::ArrayPtr<const word>> segments);
     //public: void handle_msg(uint8_t* buf);
+    //
+
+    private: void build_get();
+    private: void build_put();
+    private: void build_msg1L();
+    private: void build_msg2L();
+    private: void build_msg3L();
+    private: void build_msg4L();
+    private: void build_msg5L();
 };
 
 #endif
