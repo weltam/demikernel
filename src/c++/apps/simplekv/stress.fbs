@@ -1,0 +1,17 @@
+namespace stress;
+
+table GetMessageFB {
+    req_id:int;
+    key:string;
+}
+
+table PutMessageFB {
+    req_id:int;
+    key:string;
+    value:string;
+}
+
+table ResponseFB {
+    req_id:int;
+    value:string;
+}

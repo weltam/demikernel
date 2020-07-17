@@ -1,0 +1,19 @@
+syntax = "proto3";
+package stress;
+
+message GetMessageProto {
+    int32 req_id = 1; 
+    string key = 2;
+}
+
+message PutMessageProto {
+    int32 req_id = 1;
+    string key = 2;
+    string value = 3;
+}
+
+// Either for get or put (put will contain no value)
+message ResponseProto {
+    int32 req_id = 1;
+    string value = 2;
+}
