@@ -106,6 +106,89 @@ int main(int argc, char *argv[]) {
     dmtr_qresult_t qr = {};
     DMTR_OK(dmtr_wait(&qr, q));
     std::cerr << "Connected." << std::endl;
+    
+    // run the same trace, but check the kv is doing the right thing
+    if (check) {
+        std::unordered_map<string, string> client_map;
+        DMTR_OK(initialize_map(kv_load, client_map));
+        
+        std::string line;
+        ifstream access(kv_access.c_str());
+        if (!access) {
+            std::cerr << "Error loading access file " << kv_access.c_str() << std::endl;
+        }
+
+        std::vector<std::string> request;
+        int current_request = 0;
+        dmtr_qresult_t wait_out;
+        dmtr_qtoken_t push_token;
+        dmtr_qtoken_t pop_token;
+        bool is_get = false;
+        while (getline(access, line)) {
+            current_request ++;
+            boost::split(request, line, [](char c){ return c == ' '; });
+            if (strcmp(request[1].c_str(), "GET") == 0) {
+                is_get = true;
+            }
+            simplekv::StringPointer key((char *)request[2].c_str(), request[2].length());
+
+            if (is_get) {
+                kv->client_send_get(current_request, key, sga);
+            } else {
+            simplekv::StringPointer value((char *)request[3].c_str(), request[3].length());
+                kv->client_send_put(current_request, key, value, sga);
+                client_map[request[2]] = request[3];
+            }
+            
+            DMTR_OK(dmtr_push(&push_token, qd, &sga));
+            sent++;
+            DMTR_OK(dmtr_pop(&pop_token, qd));
+
+            int ret = dmtr_wait(&wait_out, pop_token);
+            if (ret != 0) {
+                std::cerr << "Error on pop for req " << current_request << std::endl;
+            }
+            recved++;
+            if (is_get) {
+                std::string actual_value = client_map[request[2]];
+                std::string network_value = kv->client_check_response(wait_out.qr_value.sga);
+                assert(actual_value == network_value);
+            } else {
+                // free the out sga and in sga
+                DMTR_OK(kv->free_sga(&sga, false));
+                DMTR_OK(kv->free_sga(&wait_out.qr_value.sga, true));
+
+                if (push_token != 0) {
+                    DMTR_OK(dmtr_drop(push_token));
+                    push_token = 0;
+                }
+
+                kv->client_send_get(current_request, key, sga);
+                DMTR_OK(dmtr_push(&push_token, qd, &sga));
+                DMTR_OK(dmtr_pop(&pop_token, qd));
+
+                int ret = dmtr_wait(&wait_out, pop_token);
+                if (ret != 0) {
+                    std::cerr << "Error on pop for req " << current_request << std::endl;
+                }
+                std::string network_value = kv->client_check_response(wait_out.qr_value.sga);
+                std::string actual_value = client_map[request[2]];
+                assert(actual_value == network_value); 
+            }
+
+            // free the out sga
+            DMTR_OK(kv->free_sga(&sga, false));
+            // free the in sga
+            DMTR_OK(kv->free_sga(&wait_out.qr_value.sga, true));
+            if (push_token != 0) {
+                DMTR_OK(dmtr_drop(push_token));
+                push_token = 0;
+            }
+        }
+
+        finish();
+        exit(0);
+    }
 
 
     // load the request file
@@ -116,46 +199,55 @@ int main(int argc, char *argv[]) {
     }
 
 
+
     int current_request = 0;
-    int timer_qd;
+    //int timer_qd;
     int ret;
     dmtr_qresult_t wait_out;
     dmtr_qtoken_t push_token;
-    dmtr_qtoken_t pop_tokens[2];
-    dmtr_qtoken_t timer_q_push;
+    dmtr_qtoken_t pop_tokens[1];
+    //dmtr_qtoken_t timer_q_push;
     boost::chrono::time_point<boost::chrono::steady_clock> start_time;
 
     // initialize timer_qd
-    DMTR_OK(dmtr_new_timer(&timer_qd));
+    //DMTR_OK(dmtr_new_timer(&timer_qd));
 
-    boost::chrono::nanoseconds timeout { 1000000 };
+    //boost::chrono::nanoseconds timeout { 1000000 };
+    std::vector<std::string> request;
     while (getline(f, line)) {
-        std::vector<std::string> request;
+        current_request++;
         boost::split(request, line, [](char c){return c == ' ';});
+        simplekv::StringPointer key((char *)request[2].c_str(), request[2].length());
 
         // fill in the request sga with the next request to send out
         if (strcmp(request[1].c_str(), "GET") == 0) {
-            kv->client_send_get(current_request, request[2], sga);
+            kv->client_send_get(current_request, key, sga);
 
         } else {
-            // get request
-            kv->client_send_put(current_request, request[2], request[3], sga);
+            simplekv::StringPointer value((char *)request[3].c_str(), request[3].length());
+            kv->client_send_put(current_request, key, value, sga);
         }
     
-        std::vector<dmtr_qtoken_t> tokens;
         DMTR_OK(dmtr_push(&push_token, qd, &sga));
         sent++;
         DMTR_OK(dmtr_pop(&pop_tokens[0], qd));
         start_time = boost::chrono::steady_clock::now();
 
+        /*if (recved != 0 && timer_q_push != 0) {
+            DMTR_OK(dmtr_drop(timer_q_push));
+            timer_q_push = 0;
+        }
         DMTR_OK(dmtr_push_tick(&timer_q_push, timer_qd, timeout));
-        DMTR_OK(dmtr_pop(&pop_tokens[1], timer_qd));
+        // only need to pop timer for the first packet
+        if (recved == 0) {
+            DMTR_OK(dmtr_pop(&pop_tokens[1], timer_qd));
+        }*/
 
         int idx = 0;
         bool finished_request = false;
         do {
             // wait for a returned value or for the timer to pop
-            ret = dmtr_wait_any(&wait_out, &idx, pop_tokens, 2);
+            ret = dmtr_wait_any(&wait_out, &idx, pop_tokens, 1);
             if (ret != 0) {
                 std::cerr << "Error on waiting for request" << std::endl;
                 exit(1);
@@ -167,6 +259,9 @@ int main(int argc, char *argv[]) {
                 int req_id = kv->client_handle_response(wait_out.qr_value.sga);
                 if (req_id != current_request) {
                     // receiving something from an old retry
+                    std::cout << "Here" << std::endl;
+                    std::cout << "Req: " << req_id << "; current: " << current_request << std::endl;
+                    exit(1);
                     continue;
                 }
 
@@ -181,23 +276,29 @@ int main(int argc, char *argv[]) {
                     push_token = 0;
                 }
 
-                if (timer_q_push != 0) {
+                /*if (timer_q_push != 0) {
                     DMTR_OK(dmtr_drop(timer_q_push));
                     timer_q_push = 0;
                 }
-
-                // drop the past timer pop?
-                if (pop_tokens[1] != 0) {
+                DMTR_OK(dmtr_push_tick(&timer_q_push, timer_qd, timeout));*/
+                /*if (pop_tokens[1] != 0) {
                     DMTR_OK(dmtr_drop(pop_tokens[1]));
                     pop_tokens[1] = 0;
+                }*/
 
-                }
             } else {
-                // need to retry
+                DMTR_UNREACHABLE();
+                /*// need to retry
                 if (recved != 0) {
                     retries++;
                     auto sent_dt = boost::chrono::steady_clock::now() - start_time;
                     std::cout << "Req " << current_request << " retry after: " << sent_dt.count() << std::endl;
+
+                    if (push_token != 0) {
+                        DMTR_OK(dmtr_drop(push_token));
+                        push_token = 0;
+                    }
+
                     // push the data again
                     DMTR_OK(dmtr_push(&push_token, qd, &sga));
                 }
@@ -209,9 +310,14 @@ int main(int argc, char *argv[]) {
 
                 // reset the timer
                 DMTR_OK(dmtr_push_tick(&timer_q_push, timer_qd, timeout));
-                DMTR_OK(dmtr_pop(&pop_tokens[1], timer_qd));
+                DMTR_OK(dmtr_pop(&pop_tokens[1], timer_qd));*/
             }
         } while (!finished_request);
+        request.clear();
+        // free out sga
+        DMTR_OK(kv->free_sga(&sga, false));
+        // free in sga
+        DMTR_OK(kv->free_sga(&wait_out.qr_value.sga, true));
     }
 
 

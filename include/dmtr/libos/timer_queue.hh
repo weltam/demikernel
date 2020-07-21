@@ -22,6 +22,7 @@ class timer_queue : public io_queue
     private: std::unique_ptr<task::thread_type> my_push_thread;
     private: std::unique_ptr<task::thread_type> my_pop_thread;
     private: bool my_good_flag;
+    private: bool on;
 
     private: timer_queue(int qd);
     public: static int new_object(std::unique_ptr<io_queue> &q_out, int qd);

@@ -10,20 +10,27 @@
 #include <boost/chrono.hpp>
 
 dmtr::io_queue::timer::timer() :
-    expiry(boost::chrono::steady_clock::now())
+    expiry(boost::chrono::steady_clock::now()),
+    on(false)
 {}
 
 int dmtr::io_queue::timer::set_expiry(boost::chrono::nanoseconds timeout) {
+    on = true;
     expiry = boost::chrono::steady_clock::now() + timeout;
     return 0;
 }
 
 bool dmtr::io_queue::timer::has_expired() {
-    if (boost::chrono::steady_clock::now() >= expiry) {
+    if (boost::chrono::steady_clock::now() >= expiry && on) {
+        on = true;
         return true;
     } else {
         return false;
     }
+}
+
+void dmtr::io_queue::timer::turn_off() {
+    on = false;
 }
 
 dmtr::io_queue::task::task() :
@@ -261,6 +268,7 @@ bool dmtr::io_queue::has_task(dmtr_qtoken_t qt) {
 }
 
 int dmtr::io_queue::get_task(task *&t_out, dmtr_qtoken_t qt) {
+    //printf("Has task %lx: %d\n", qt, has_task(qt));
     DMTR_TRUE(ENOENT, has_task(qt));
     t_out = get_task(qt);
     DMTR_NOTNULL(ENOTSUP, t_out);

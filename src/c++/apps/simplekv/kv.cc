@@ -35,15 +35,12 @@ simplekv::request decode_enum(int32_t val) {
     std::cerr << "Unknown enum val: " << val << std::endl;
     exit(1);
 }
-simplekv::simplekv(enum library cereal_type) :
-            my_cereal_type(cereal_type)
-{}
 
-// initializes the kv store from ycsb load file
-int simplekv::init(string load_file) {
+int initialize_map(string load_file, unordered_map<string, string> &my_map) {
     ifstream f(load_file.c_str());
 
     if (!f) {
+        std::cerr << "Error opening: " << load_file << std::endl;
         return 1;
     }
 
@@ -62,5 +59,60 @@ int simplekv::init(string load_file) {
     }
 
     f.close();
+    return 0;
+}
+
+simplekv::simplekv(enum library cereal_type) :
+            my_cereal_type(cereal_type)
+{}
+
+// initializes the kv store from ycsb load file
+int simplekv::init(string load_file) {
+    if (initialize_map(load_file, my_map) != 0) {
+        return 1;
+    }
+    // for handcrafted serialization, need to initialize the bytes dictionary
+    switch (my_cereal_type) {
+        case simplekv::library::HANDCRAFTED:
+            for (auto &it: my_map) {
+                simplekv::StringPointer key((char *)it.first.c_str(), it.first.length());
+                simplekv::StringPointer value((char *)it.second.c_str(), it.second.length());
+                my_bytes_map.insert(make_pair(key, value));
+            }
+        default:
+            break;
+    }
+    return 0;
+}
+
+// depending on if this is a recv buffer or send buffer for kv server of client
+// frees the entire sga or just the pointer at front
+// Ptr at front describes message type and req_id
+// For capnproto and flatbuffers, the pointers after idx 0 go to the capnproto
+// or flatbuffer builder in memory
+// So we don't want to free that by accident
+int simplekv::free_sga(dmtr_sgarray_t* sga, bool is_in) {
+    switch (my_cereal_type) {
+        case simplekv::library::PROTOBUF:
+            return dmtr_sgafree(sga);
+        case simplekv::library::FLATBUFFERS:
+            if (is_in) {
+                return dmtr_sgafree(sga);
+            } else {
+                return dmtr_sgafree_seg(sga, 0);
+            }
+        case simplekv::library::CAPNPROTO:
+            if (is_in) {
+                return dmtr_sgafree(sga);
+            } else {
+                return dmtr_sgafree_seg(sga, 0);
+            }
+        case simplekv::library::HANDCRAFTED:
+            if (is_in) {
+                return dmtr_sgafree(sga);
+            } else {
+                return dmtr_sgafree_seg(sga, 0);
+            }
+    }
     return 0;
 }

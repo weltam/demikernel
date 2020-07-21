@@ -72,7 +72,8 @@ int main(int argc, char *argv[])
 
     std::vector<dmtr_qtoken_t> tokens;
     dmtr_qtoken_t push_tokens[256];
-    dmtr_sgarray_t popped_buffers[256];
+    std::pair<dmtr_sgarray_t, bool> popped_buffers[256];
+    std::pair<dmtr_sgarray_t, bool> pushed_buffers[256];
     memset(push_tokens, 0, 256 * sizeof(dmtr_qtoken_t));
     dmtr_qtoken_t qtemp;
 
@@ -137,19 +138,35 @@ int main(int argc, char *argv[])
                 DMTR_OK(dmtr_accept(&tokens[0], lqd));
             } else {
                 recved++;
+                // free last pushed and popped buffers if necessary
+                if (popped_buffers[idx].second) {
+                    DMTR_OK(kv->free_sga(&popped_buffers[idx].first, true));
+                }
+                popped_buffers[idx] = std::make_pair(wait_out.qr_value.sga, false);
+                
                 // process the request
-                kv->server_handle_request(wait_out.qr_value.sga);
+                dmtr_sgarray_t out_sga;
+                bool free_in;
+                bool free_out;
+                DMTR_OK(kv->server_handle_request(wait_out.qr_value.sga, out_sga, &free_in, &free_out));
+
+                if (pushed_buffers[idx].second) {
+                    DMTR_OK(kv->free_sga(&pushed_buffers[idx].first, false));
+                }
+
+                pushed_buffers[idx] = std::make_pair(out_sga, free_out);
+                popped_buffers[idx].second = free_in;
+
                 // remove last push token
                 if (push_tokens[idx] != 0) {
                     // should be done by now if we already got a response
                     DMTR_OK(dmtr_drop(push_tokens[idx]));
-                    DMTR_OK(dmtr_sgafree(&popped_buffers[idx]));
-                    popped_buffers[idx] = wait_out.qr_value.sga;
                 }
+
                 push_tokens[idx] = 0;
                 
                 // reserialize the message to send back into the array
-                DMTR_OK(dmtr_push(&push_tokens[idx], wait_out.qr_qd, &wait_out.qr_value.sga));
+                DMTR_OK(dmtr_push(&push_tokens[idx], wait_out.qr_qd, &out_sga));
                 sent++;
                 // async pop to get next message
                 DMTR_OK(dmtr_pop(&tokens[idx], wait_out.qr_qd));

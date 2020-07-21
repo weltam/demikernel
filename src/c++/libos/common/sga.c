@@ -43,3 +43,16 @@ int dmtr_sgafree(dmtr_sgarray_t *sga) {
 
     return 0;
 }
+
+// free a particular segment within an SGA
+int dmtr_sgafree_seg(dmtr_sgarray_t *sga, int seg) {
+    if (NULL == sga) {
+        return 0;
+    }
+
+    if (NULL == sga->sga_buf) {
+        free(sga->sga_segs[seg].sgaseg_buf);
+    }
+
+    return 0;
+}

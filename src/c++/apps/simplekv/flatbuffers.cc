@@ -8,28 +8,31 @@
 #include <dmtr/libos/mem.h>
 #include <sys/types.h>
 #include <iostream>
+#include <assert.h>
 
 flatbuffers_kv::flatbuffers_kv() :
     simplekv(simplekv::library::FLATBUFFERS)
 {}
 
-void flatbuffers_kv::client_send_get(int req_id, string key, dmtr_sgarray_t &sga) {
+void flatbuffers_kv::client_send_get(int req_id, simplekv::StringPointer key, dmtr_sgarray_t &sga) {
     flatbuffers::FlatBufferBuilder builder(128);
     GetMessageFBBuilder getMsg(builder);
-    auto msgKey = builder.CreateString(key);
+    auto msgKey = builder.CreateString((char *)key.ptr, key.len);
     getMsg.add_key(msgKey);
+    getMsg.add_req_id(req_id);
     auto finalMsg = getMsg.Finish();
     builder.Finish(finalMsg);
     encode_msg(sga, builder.GetBufferPointer(), builder.GetSize(), simplekv::request::GET);
 }
 
-void flatbuffers_kv::client_send_put(int req_id, string key, string value, dmtr_sgarray_t &sga) {
+void flatbuffers_kv::client_send_put(int req_id, simplekv::StringPointer key, simplekv::StringPointer value, dmtr_sgarray_t &sga) {
     flatbuffers::FlatBufferBuilder builder(128);
     PutMessageFBBuilder putMsg(builder);
-    auto msgKey = builder.CreateString(key);
-    auto msgValue = builder.CreateString(value);
+    auto msgKey = builder.CreateString((char *)key.ptr, key.len);
+    auto msgValue = builder.CreateString((char *)value.ptr, value.len);
     putMsg.add_key(msgKey);
     putMsg.add_value(msgValue);
+    putMsg.add_req_id(req_id);
     auto finalMsg = putMsg.Finish();
     builder.Finish(finalMsg);
     encode_msg(sga, builder.GetBufferPointer(), builder.GetSize(), simplekv::request::PUT);
@@ -51,10 +54,28 @@ int flatbuffers_kv::client_handle_response(dmtr_sgarray_t &sga) {
 
 }
 
-void flatbuffers_kv::server_handle_request(dmtr_sgarray_t &sga) {
+string flatbuffers_kv::client_check_response(dmtr_sgarray_t &sga) {
     simplekv::request msg_type;
     uint8_t* data = decode_msg(sga, &msg_type);
+    const ResponseFB* responseMsg;
 
+    switch (msg_type) {
+        case simplekv::request::RESPONSE:
+            responseMsg = flatbuffers::GetRoot<ResponseFB>(data);
+            return string(responseMsg->value()->c_str());
+        default:
+            std::cerr << "Client received back non response message type: " << encode_enum(msg_type) << std::endl;
+            exit(1);
+    }
+    
+}
+
+int flatbuffers_kv::server_handle_request(dmtr_sgarray_t &in_sga, dmtr_sgarray_t &out_sga, bool* free_in, bool* free_out) {
+    *free_in = true;
+    *free_out = true;
+    simplekv::request msg_type;
+    uint8_t* data = decode_msg(in_sga, &msg_type);
+    
     const GetMessageFB* getMsg;
     const PutMessageFB* putMsg;
     flatbuffers::Offset<flatbuffers::String> msgValue;
@@ -80,7 +101,8 @@ void flatbuffers_kv::server_handle_request(dmtr_sgarray_t &sga) {
     }
     auto finalMsg = responseMsg.Finish();
     builder.Finish(finalMsg);
-    encode_msg(sga, builder.GetBufferPointer(), builder.GetSize(), simplekv::request::RESPONSE);
+    encode_msg(out_sga, builder.GetBufferPointer(), builder.GetSize(), simplekv::request::RESPONSE);
+    return 0;
 }
 
 void flatbuffers_kv::encode_msg(dmtr_sgarray_t &sga, uint8_t* data_buf, int size, simplekv::request msg_type) {

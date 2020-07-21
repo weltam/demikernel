@@ -23,6 +23,7 @@ std::string config_path;
 std::string kv_load;
 std::string kv_access;
 uint64_t packet_size = 1000;
+bool check = false;
 #define FILL_CHAR 'a'
 
 using namespace boost::program_options;
@@ -39,6 +40,7 @@ void parse_args(int argc, char **argv, bool server)
         ("system", value<std::string>(&cereal_system)->default_value("none"), "serialization method to test")
         ("loads", value<std::string>(), "kv load file")
         ("access", value<std::string>(), "kv access file")
+        ("check", "Check that the puts and gets did the correct thing")
         ("file", value<std::string>(), "log file");
 
     variables_map vm;
@@ -116,6 +118,9 @@ void parse_args(int argc, char **argv, bool server)
         file = vm["file"].as<std::string>();
     }
 
+    if (vm.count("check")) {
+        check = true;
+    }
 
 };
 

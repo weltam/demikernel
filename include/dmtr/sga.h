@@ -13,6 +13,7 @@ extern "C" {
 
 DMTR_EXPORT int dmtr_sgalen(size_t *len_out, const dmtr_sgarray_t *sga);
 DMTR_EXPORT int dmtr_sgafree(dmtr_sgarray_t *sga);
+DMTR_EXPORT int dmtr_sgafree_seg(dmtr_sgarray_t *sga, int seg);
 
 #ifdef __cplusplus
 }

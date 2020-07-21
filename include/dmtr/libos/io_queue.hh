@@ -29,8 +29,10 @@ class io_queue
     };
     protected: class timer {
         private: boost::chrono::steady_clock::time_point expiry;
+        private: bool on;
         public: bool has_expired();
         public: int set_expiry(boost::chrono::nanoseconds timeout);
+        public: void turn_off();
         public: timer();
     };
 

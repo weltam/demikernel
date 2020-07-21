@@ -35,6 +35,7 @@ dmtr::timer_queue::push_tick(dmtr_qtoken_t qt, const boost::chrono::nanoseconds 
 {
     DMTR_TRUE(EINVAL, good());
     DMTR_NOTNULL(EINVAL, my_push_thread);
+    on = true;
 
     DMTR_OK(new_task(qt, DMTR_OPC_PUSH, expiry));
     my_push_thread->enqueue(qt);

@@ -20,10 +20,11 @@ class protobuf_kv : public simplekv
 {
     public: protobuf_kv();
     
-    public: virtual void client_send_get(int req_id, string key, dmtr_sgarray_t &sga);
-    public: virtual void client_send_put(int req_id, string key, string value, dmtr_sgarray_t &sga);
+    public: virtual void client_send_get(int req_id, simplekv::StringPointer key, dmtr_sgarray_t &sga);
+    public: virtual void client_send_put(int req_id, simplekv::StringPointer key, simplekv::StringPointer value, dmtr_sgarray_t &sga);
     public: virtual int client_handle_response(dmtr_sgarray_t &sga);
-    public: virtual void server_handle_request(dmtr_sgarray_t &sga);
+    public: virtual string client_check_response(dmtr_sgarray_t &sga);
+    public: virtual int server_handle_request(dmtr_sgarray_t &in_sga, dmtr_sgarray_t &out_sga, bool* free_in, bool* free_out);
 
     private: void encode_msg(dmtr_sgarray_t &sga, const Message& msg, simplekv::request msg_type);
 
