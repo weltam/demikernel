@@ -94,6 +94,7 @@ int main(int argc, char *argv[]) {
         echo = &protobuf_data;
         echo->serialize_message(sga);
     } else if (!std::strcmp(cereal_system.c_str(), "capnproto")) {
+        std::cout << "Init'ing capnproto data" << std::endl;
         echo = &capnproto_data;
         echo->serialize_message(sga);
     } else if (!std::strcmp(cereal_system.c_str(), "flatbuffers")) {
@@ -122,7 +123,7 @@ int main(int argc, char *argv[]) {
         dmtr_qtoken_t pop_tokens[clients*2];
         dmtr_qtoken_t timer_q_push[clients];
         // timeout is 100 us
-        boost::chrono::nanoseconds timeout { 200000 };
+        boost::chrono::nanoseconds timeout { 300000 };
 
         boost::chrono::time_point<boost::chrono::steady_clock> start_times[clients];
         boost::chrono::time_point<boost::chrono::steady_clock> timer_times[clients];

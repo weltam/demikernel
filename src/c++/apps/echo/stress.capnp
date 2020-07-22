@@ -30,7 +30,7 @@ struct Msg4LCP {
 }
 
 struct Msg5LCP {
-    left @0 :Msg5LCP;
-    right @1 :Msg5LCP;
+    left @0 :Msg4LCP;
+    right @1 :Msg4LCP;
 }
 

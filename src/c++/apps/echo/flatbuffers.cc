@@ -109,7 +109,6 @@ void flatbuffers_echo::deserialize_message(dmtr_sgarray_t &sga) {
 }
 
 void flatbuffers_echo::encode_msg(dmtr_sgarray_t &sga, uint8_t* data_buf, int size) {
-    handle_msg(data_buf);
     void *p = NULL;
     size_t dataLen = (size_t) size;
     size_t typeLen = my_message_type.length();
