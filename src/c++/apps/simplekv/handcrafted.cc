@@ -17,14 +17,15 @@ handcrafted_kv::handcrafted_kv() :
     simplekv(simplekv::library::HANDCRAFTED)
 {}
 
-void handcrafted_kv::client_send_put(int req_id, simplekv::StringPointer key, simplekv::StringPointer value, dmtr_sgarray_t &sga) {
+void handcrafted_kv::client_send_put(int req_id, simplekv::StringPointer key, simplekv::StringPointer value, dmtr_sgarray_t &sga, void *context) {
     // put message has 1 pointer to encoded type & req_id
     // 1 pointer to key
     // 1 pointer to value
     sga.sga_numsegs = 3;
     
     // encode type & req_id
-    encode_type(sga, simplekv::request::PUT, req_id);
+    dmtr_sgarray_t fake_sga;
+    encode_type(fake_sga, sga, simplekv::request::PUT, req_id, false);
 
     // encode the key and value
     sga.sga_segs[1].sgaseg_len = key.len;
@@ -35,11 +36,12 @@ void handcrafted_kv::client_send_put(int req_id, simplekv::StringPointer key, si
 
 }
 
-void handcrafted_kv::client_send_get(int req_id, simplekv::StringPointer key, dmtr_sgarray_t &sga) {
+void handcrafted_kv::client_send_get(int req_id, simplekv::StringPointer key, dmtr_sgarray_t &sga, void* context) {
     sga.sga_numsegs = 2;
 
     // encode type & req_id
-    encode_type(sga, simplekv::request::GET, req_id);
+    dmtr_sgarray_t fake_sga;
+    encode_type(fake_sga, sga, simplekv::request::GET, req_id, false);
 
     // encode the key
     sga.sga_segs[1].sgaseg_len = key.len;
@@ -60,20 +62,20 @@ string handcrafted_kv::client_check_response(dmtr_sgarray_t &sga) {
     }
 }
 
-int handcrafted_kv::server_handle_request(dmtr_sgarray_t &in_sga, dmtr_sgarray_t &out_sga, bool* free_in, bool* free_out) {
+int handcrafted_kv::server_handle_request(dmtr_sgarray_t &in_sga, dmtr_sgarray_t &out_sga, bool* free_in, bool* free_out, void *context) {
     simplekv::request msg_type;
     int req_id = decode_type(in_sga, &msg_type);
     
     switch (msg_type) {
         case simplekv::request::GET:
             *free_in = true; // free inward buffer when possible
-            *free_out = true; // do not free outward buffer. ever
+            *free_out = false; // do not free outward buffer. ever
             return server_handle_get(in_sga, out_sga, req_id);
             
             break;
         case simplekv::request::PUT:
             *free_in = false; // don't free inward buffer; we will.
-            *free_out = true; // don't free outward buffer.
+            *free_out = false; // don't free outward buffer; only ptrs.
             return server_handle_put(in_sga, out_sga, req_id);
             break;
         default:
@@ -88,7 +90,7 @@ int handcrafted_kv::server_handle_get(dmtr_sgarray_t &in_sga, dmtr_sgarray_t &ou
     simplekv::StringPointer key_ptr((char *)(in_sga.sga_segs[1].sgaseg_buf), in_sga.sga_segs[1].sgaseg_len);
     simplekv::StringPointer value_ptr = my_bytes_map.at(key_ptr);
 
-    encode_type(out_sga, simplekv::request::RESPONSE, req_id);
+    encode_type(in_sga, out_sga, simplekv::request::RESPONSE, req_id, true);
     out_sga.sga_numsegs = 2;
     out_sga.sga_segs[1].sgaseg_len = value_ptr.len;
     out_sga.sga_segs[1].sgaseg_buf = (void *)(value_ptr.ptr);
@@ -112,22 +114,37 @@ int handcrafted_kv::server_handle_put(dmtr_sgarray_t &in_sga, dmtr_sgarray_t &ou
     }
 
     out_sga.sga_numsegs = 1;
-    encode_type(out_sga, simplekv::request::RESPONSE, req_id);
+    encode_type(in_sga, out_sga, simplekv::request::RESPONSE, req_id, true);
     return 0;
 }
 
-void handcrafted_kv::encode_type(dmtr_sgarray_t &sga, simplekv::request req_type, int req_id) {
+void handcrafted_kv::encode_type(dmtr_sgarray_t &in_sga, dmtr_sgarray_t &out_sga, simplekv::request req_type, int req_id, bool opt) {
     int32_t type = encode_enum(req_type);
     size_t totalLen = sizeof(type) + sizeof(int);
+    char* ptr;
+
+    // optimization: on sending responses, can refer back to the data in the
+    // original message
+    if (opt) {
+        void *p = in_sga.sga_segs[0].sgaseg_buf;
+        ptr = reinterpret_cast<char *>(p);
+        // just need to change type
+        // req_id, next int, will remain the same
+        *((int32_t *)ptr) = type;
+
+        out_sga.sga_segs[0].sgaseg_len = totalLen;
+        out_sga.sga_segs[0].sgaseg_buf = p;
+        return;
+    }
 
     void *p = NULL;
     dmtr_malloc(&p, totalLen);
     assert(p != NULL);
 
-    sga.sga_segs[0].sgaseg_len = totalLen;
-    sga.sga_segs[0].sgaseg_buf = p;
+    out_sga.sga_segs[0].sgaseg_len = totalLen;
+    out_sga.sga_segs[0].sgaseg_buf = p;
     char *buf = reinterpret_cast<char *>(p);
-    char *ptr = buf;
+    ptr = buf;
 
     // encode type
     *((int32_t *)ptr) = type;

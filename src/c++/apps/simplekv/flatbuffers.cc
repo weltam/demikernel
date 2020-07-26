@@ -14,28 +14,28 @@ flatbuffers_kv::flatbuffers_kv() :
     simplekv(simplekv::library::FLATBUFFERS)
 {}
 
-void flatbuffers_kv::client_send_get(int req_id, simplekv::StringPointer key, dmtr_sgarray_t &sga) {
-    flatbuffers::FlatBufferBuilder builder(128);
-    GetMessageFBBuilder getMsg(builder);
-    auto msgKey = builder.CreateString((char *)key.ptr, key.len);
+void flatbuffers_kv::client_send_get(int req_id, simplekv::StringPointer key, dmtr_sgarray_t &sga, void *context) {
+    flatbuffers::FlatBufferBuilder* builder = reinterpret_cast<flatbuffers::FlatBufferBuilder *>(context);
+    GetMessageFBBuilder getMsg(*builder);
+    auto msgKey = builder->CreateString((char *)key.ptr, key.len);
     getMsg.add_key(msgKey);
     getMsg.add_req_id(req_id);
     auto finalMsg = getMsg.Finish();
-    builder.Finish(finalMsg);
-    encode_msg(sga, builder.GetBufferPointer(), builder.GetSize(), simplekv::request::GET);
+    builder->Finish(finalMsg);
+    encode_msg(sga, builder->GetBufferPointer(), builder->GetSize(), simplekv::request::GET);
 }
 
-void flatbuffers_kv::client_send_put(int req_id, simplekv::StringPointer key, simplekv::StringPointer value, dmtr_sgarray_t &sga) {
-    flatbuffers::FlatBufferBuilder builder(128);
-    PutMessageFBBuilder putMsg(builder);
-    auto msgKey = builder.CreateString((char *)key.ptr, key.len);
-    auto msgValue = builder.CreateString((char *)value.ptr, value.len);
+void flatbuffers_kv::client_send_put(int req_id, simplekv::StringPointer key, simplekv::StringPointer value, dmtr_sgarray_t &sga, void *context) {
+    flatbuffers::FlatBufferBuilder* builder = reinterpret_cast<flatbuffers::FlatBufferBuilder *>(context);
+    PutMessageFBBuilder putMsg(*builder);
+    auto msgKey = builder->CreateString((char *)key.ptr, key.len);
+    auto msgValue = builder->CreateString((char *)value.ptr, value.len);
     putMsg.add_key(msgKey);
     putMsg.add_value(msgValue);
     putMsg.add_req_id(req_id);
     auto finalMsg = putMsg.Finish();
-    builder.Finish(finalMsg);
-    encode_msg(sga, builder.GetBufferPointer(), builder.GetSize(), simplekv::request::PUT);
+    builder->Finish(finalMsg);
+    encode_msg(sga, builder->GetBufferPointer(), builder->GetSize(), simplekv::request::PUT);
 }
 
 int flatbuffers_kv::client_handle_response(dmtr_sgarray_t &sga) {
@@ -70,7 +70,7 @@ string flatbuffers_kv::client_check_response(dmtr_sgarray_t &sga) {
     
 }
 
-int flatbuffers_kv::server_handle_request(dmtr_sgarray_t &in_sga, dmtr_sgarray_t &out_sga, bool* free_in, bool* free_out) {
+int flatbuffers_kv::server_handle_request(dmtr_sgarray_t &in_sga, dmtr_sgarray_t &out_sga, bool* free_in, bool* free_out, void *context) {
     *free_in = true;
     *free_out = true;
     simplekv::request msg_type;
@@ -80,13 +80,13 @@ int flatbuffers_kv::server_handle_request(dmtr_sgarray_t &in_sga, dmtr_sgarray_t
     const PutMessageFB* putMsg;
     flatbuffers::Offset<flatbuffers::String> msgValue;
     
-    flatbuffers::FlatBufferBuilder builder(128);
-    ResponseFBBuilder responseMsg(builder);
+    flatbuffers::FlatBufferBuilder* builder = reinterpret_cast<flatbuffers::FlatBufferBuilder *>(context);
+    ResponseFBBuilder responseMsg(*builder);
 
     switch(msg_type) {
         case simplekv::request::GET:
             getMsg = flatbuffers::GetRoot<GetMessageFB>(data);
-            msgValue = builder.CreateString(my_map.at(getMsg->key()->c_str()));
+            msgValue = builder->CreateString(my_map.at(getMsg->key()->c_str()));
             responseMsg.add_value(msgValue);
             responseMsg.add_req_id(getMsg->req_id());
             break;
@@ -100,8 +100,8 @@ int flatbuffers_kv::server_handle_request(dmtr_sgarray_t &in_sga, dmtr_sgarray_t
             exit(1);
     }
     auto finalMsg = responseMsg.Finish();
-    builder.Finish(finalMsg);
-    encode_msg(out_sga, builder.GetBufferPointer(), builder.GetSize(), simplekv::request::RESPONSE);
+    builder->Finish(finalMsg);
+    encode_msg(out_sga, builder->GetBufferPointer(), builder->GetSize(), simplekv::request::RESPONSE);
     return 0;
 }
 

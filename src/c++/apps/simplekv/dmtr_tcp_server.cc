@@ -6,6 +6,7 @@
 #include "kv.hh"
 #include "flatbuffers.hh"
 #include "handcrafted.hh"
+#include <capnp/message.h>
 #include "protobuf.hh"
 #include <arpa/inet.h>
 #include <boost/chrono.hpp>
@@ -99,15 +100,21 @@ int main(int argc, char *argv[])
     protobuf_kv protobuf_kv_server;
     capnproto_kv capnproto_kv_server;
     flatbuffers_kv flatbuffers_kv_server;
+
+    simplekv::library library;
     
-    if (!std::strcmp(cereal_system.c_str(), "none")) {
+    if (!std::strcmp(cereal_system.c_str(), "handcrafted")) {
         kv = reinterpret_cast <simplekv*>(&handcrafted_kv_server);
+        library = simplekv::library::HANDCRAFTED;
     } else if (!std::strcmp(cereal_system.c_str(), "protobuf")) {
         kv = reinterpret_cast <simplekv*>(&protobuf_kv_server);
+        library = simplekv::library::PROTOBUF;
     } else if (!std::strcmp(cereal_system.c_str(), "capnproto")) {
         kv = reinterpret_cast <simplekv*>(&capnproto_kv_server);
+        library = simplekv::library::CAPNPROTO;
     } else if (!std::strcmp(cereal_system.c_str(), "flatbuffers")) {
         kv = reinterpret_cast <simplekv*>(&flatbuffers_kv_server);
+        library = simplekv::library::FLATBUFFERS;
     } else {
         std::cerr << "Serialization cereal_system " << cereal_system  << " unknown." << std::endl;
         exit(1);
@@ -145,10 +152,23 @@ int main(int argc, char *argv[])
                 popped_buffers[idx] = std::make_pair(wait_out.qr_value.sga, false);
                 
                 // process the request
+                // define context if capnproto
+                capnp::MallocMessageBuilder message_builder;
+                flatbuffers::FlatBufferBuilder fb_builder(128);
+                void *context = NULL;
+                switch (library) {
+                    case simplekv::library::CAPNPROTO:
+                        context = (void *)(&message_builder);
+                        break;
+                    case simplekv::library::FLATBUFFERS:
+                        context = (void *)(&fb_builder);
+                    default:
+                        break;
+                }
                 dmtr_sgarray_t out_sga;
                 bool free_in;
                 bool free_out;
-                DMTR_OK(kv->server_handle_request(wait_out.qr_value.sga, out_sga, &free_in, &free_out));
+                DMTR_OK(kv->server_handle_request(wait_out.qr_value.sga, out_sga, &free_in, &free_out, context));
 
                 if (pushed_buffers[idx].second) {
                     DMTR_OK(kv->free_sga(&pushed_buffers[idx].first, false));

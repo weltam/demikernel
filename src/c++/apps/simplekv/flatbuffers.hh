@@ -18,11 +18,15 @@ class flatbuffers_kv : public simplekv
 {
     public: flatbuffers_kv();
 
-    public: virtual void client_send_get(int req_id, simplekv::StringPointer key, dmtr_sgarray_t &sga);
-    public: virtual void client_send_put(int req_id, simplekv::StringPointer key, simplekv::StringPointer value, dmtr_sgarray_t &sga);
+    public: virtual void client_send_get(int req_id, simplekv::StringPointer key, dmtr_sgarray_t &sga, void *context);
+
+    public: virtual void client_send_put(int req_id, simplekv::StringPointer key, simplekv::StringPointer value, dmtr_sgarray_t &sga, void *context);
+
     public: virtual int client_handle_response(dmtr_sgarray_t &sga);
+
     public: virtual string client_check_response(dmtr_sgarray_t &sga);
-    public: virtual int server_handle_request(dmtr_sgarray_t &in_sga, dmtr_sgarray_t &out_sga, bool* free_in, bool* free_out);
+
+    public: virtual int server_handle_request(dmtr_sgarray_t &in_sga, dmtr_sgarray_t &out_sga, bool* free_in, bool* free_outi, void *context);
 
     private: void encode_msg(dmtr_sgarray_t &sga, uint8_t* data_buf, int size, simplekv::request msg_type);
 

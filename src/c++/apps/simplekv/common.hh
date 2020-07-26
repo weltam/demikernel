@@ -18,12 +18,13 @@
 uint16_t port = 12345;
 boost::optional<std::string> server_ip_addr;
 boost::optional<std::string> file;
-std::string cereal_system = std::string("none");
+std::string cereal_system = std::string("handcrafted");
 std::string config_path;
 std::string kv_load;
 std::string kv_access;
 uint64_t packet_size = 1000;
 bool check = false;
+uint32_t client_id = 0;
 #define FILL_CHAR 'a'
 
 using namespace boost::program_options;
@@ -41,6 +42,7 @@ void parse_args(int argc, char **argv, bool server)
         ("loads", value<std::string>(), "kv load file")
         ("access", value<std::string>(), "kv access file")
         ("check", "Check that the puts and gets did the correct thing")
+        ("id", value<uint32_t>(&client_id)->default_value(0), "Client id")
         ("file", value<std::string>(), "log file");
 
     variables_map vm;
@@ -108,10 +110,12 @@ void parse_args(int argc, char **argv, bool server)
         //std::cout << "Setting server port to: " << port << std::endl;
     }
 
+    if (vm.count("id")) {
+        client_id = vm["id"].as<uint32_t>();
+    }
+
     if (vm.count("system")) {
         cereal_system = vm["system"].as<std::string>();
-        if (!std::strcmp(cereal_system.c_str(), "none")) {
-        }
     }
 
     if (vm.count("file")) {

@@ -86,12 +86,12 @@ class simplekv
     public: int init(string load_file);
     public: int free_sga(dmtr_sgarray_t* sga, bool is_in);
 
-    public: virtual void client_send_put(int req_id, StringPointer key, StringPointer value, dmtr_sgarray_t &sga) = 0;
-    public: virtual void client_send_get(int req_id, StringPointer key, dmtr_sgarray_t &sga) = 0;
+    public: virtual void client_send_put(int req_id, StringPointer key, StringPointer value, dmtr_sgarray_t &sga, void *context) = 0;
+    public: virtual void client_send_get(int req_id, StringPointer key, dmtr_sgarray_t &sga, void *context) = 0;
     public: virtual int client_handle_response(dmtr_sgarray_t &sga) = 0;
     public: virtual string client_check_response(dmtr_sgarray_t &sga) = 0;
 
-    public: virtual int server_handle_request(dmtr_sgarray_t &in_sga, dmtr_sgarray_t &out_sga, bool* free_in, bool* free_out) = 0;
+    public: virtual int server_handle_request(dmtr_sgarray_t &in_sga, dmtr_sgarray_t &out_sga, bool* free_in, bool* free_out, void *context) = 0;
 };
 
 int32_t encode_enum(simplekv::request req);

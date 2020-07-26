@@ -20,14 +20,14 @@ protobuf_kv::protobuf_kv() :
     simplekv(simplekv::library::PROTOBUF)
 {}
 
-void protobuf_kv::client_send_get(int req_id, simplekv::StringPointer key, dmtr_sgarray_t &sga) {
+void protobuf_kv::client_send_get(int req_id, simplekv::StringPointer key, dmtr_sgarray_t &sga, void *context) {
     GetMessageProto* get = new GetMessageProto;
     get->set_key(key.string());
     get->set_req_id(req_id);
     encode_msg(sga, *get, simplekv::request::GET);
 }
 
-void protobuf_kv::client_send_put(int req_id, simplekv::StringPointer key, simplekv::StringPointer value, dmtr_sgarray_t &sga) {
+void protobuf_kv::client_send_put(int req_id, simplekv::StringPointer key, simplekv::StringPointer value, dmtr_sgarray_t &sga, void *context) {
     PutMessageProto* put = new PutMessageProto;
     put->set_key(key.string());
     put->set_req_id(req_id);
@@ -66,7 +66,7 @@ string protobuf_kv::client_check_response(dmtr_sgarray_t &sga) {
     
 }
 
-int protobuf_kv::server_handle_request(dmtr_sgarray_t &in_sga, dmtr_sgarray_t &out_sga, bool* free_in, bool* free_out) {
+int protobuf_kv::server_handle_request(dmtr_sgarray_t &in_sga, dmtr_sgarray_t &out_sga, bool* free_in, bool* free_out, void *context) {
     simplekv::request msg_type;
     string data = decode_msg(in_sga, &msg_type);
 
