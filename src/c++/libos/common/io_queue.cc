@@ -177,6 +177,10 @@ int dmtr::io_queue::push_tick(dmtr_qtoken_t qt, const boost::chrono::nanoseconds
     return ENOTSUP;
 }
 
+int dmtr::io_queue::stop_timer(dmtr_qtoken_t qt) {
+    return ENOTSUP;
+}
+
 int dmtr::io_queue::close() {
     return 0;
 }

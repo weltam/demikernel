@@ -118,6 +118,7 @@ class io_queue
     public: virtual int poll(dmtr_qresult_t &qr_out, dmtr_qtoken_t qt) = 0;
     public: virtual int drop(dmtr_qtoken_t qt);
     public: virtual int push_tick(dmtr_qtoken_t qt, const boost::chrono::nanoseconds timeout);
+    public: virtual int stop_timer(dmtr_qtoken_t qt);
 
     public: static int set_non_blocking(int fd);
     protected: int new_task(dmtr_qtoken_t qt, dmtr_opcode_t opcode);

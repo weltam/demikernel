@@ -244,12 +244,13 @@ int main(int argc, char *argv[]) {
     dmtr_qtoken_t push_token;
     dmtr_qtoken_t pop_tokens[2];
     dmtr_qtoken_t timer_q_push;
+    dmtr_qtoken_t timer_q_stop;
     boost::chrono::time_point<boost::chrono::steady_clock> start_time;
 
     // initialize timer_qd
     DMTR_OK(dmtr_new_timer(&timer_qd));
 
-    boost::chrono::nanoseconds timeout { 1000000 };
+    boost::chrono::nanoseconds timeout { timeout_value };
     std::vector<std::string> request;
     while (getline(f, line)) {
         boost::split(request, line, [](char c){return c == ' ';});
@@ -290,12 +291,12 @@ int main(int argc, char *argv[]) {
         DMTR_OK(dmtr_pop(&pop_tokens[0], qd));
         start_time = boost::chrono::steady_clock::now();
 
-        /*if (recved != 0 && timer_q_push != 0) {
+        if (recved != 0 && timer_q_push != 0) {
             DMTR_OK(dmtr_drop(timer_q_push));
             timer_q_push = 0;
-        }*/
+        }
+        dmtr_push_tick(&timer_q_push, timer_qd, timeout);
         if (recved == 0) {
-            DMTR_OK(dmtr_push_tick(&timer_q_push, timer_qd, timeout));
             // only need to pop timer for the first packet
             DMTR_OK(dmtr_pop(&pop_tokens[1], timer_qd));
         }
@@ -319,6 +320,15 @@ int main(int argc, char *argv[]) {
                 if (req_id != current_request) {
                     // receiving something from an old retry
                     std::cout << "Received old message of Req: " << req_id << "; current: " << current_request << std::endl;
+
+                    // drop the pop token?
+                    if (pop_tokens[0] != 0) {
+                        DMTR_OK(dmtr_drop(pop_tokens[0]));
+                        pop_tokens[0] = 0;
+                    }
+
+                    // pop again
+                    DMTR_OK(dmtr_pop(&pop_tokens[0], qd));
                     continue;
                 }
 
@@ -333,15 +343,12 @@ int main(int argc, char *argv[]) {
                     push_token = 0;
                 }
 
-                if (timer_q_push != 0) {
-                    DMTR_OK(dmtr_drop(timer_q_push));
-                    timer_q_push = 0;
+                if (timer_q_stop != 0 && recved != 1) {
+                    DMTR_OK(dmtr_drop(timer_q_stop));
+                    timer_q_stop = 0;
                 }
-                DMTR_OK(dmtr_push_tick(&timer_q_push, timer_qd, timeout));
-                /*if (pop_tokens[1] != 0) {
-                    DMTR_OK(dmtr_drop(pop_tokens[1]));
-                    pop_tokens[1] = 0;
-                }*/
+                // turn off the timer right now
+                DMTR_OK(dmtr_stop_timer(&timer_q_stop, timer_qd));
 
             } else {
                 // need to retry
@@ -367,11 +374,9 @@ int main(int argc, char *argv[]) {
 
                 // reset the timer
                 DMTR_OK(dmtr_push_tick(&timer_q_push, timer_qd, timeout));
-                std::cout << "Reset on timer push" << std::endl;
                 DMTR_OK(dmtr_pop(&pop_tokens[1], timer_qd));
-                std::cout << "Reset on timer pop" << std::endl;
             }
-        } while (!finished_request);
+        } while (!finished_request && ret == 0);
         request.clear();
         // free out sga
         DMTR_OK(kv->free_sga(&sga, false));

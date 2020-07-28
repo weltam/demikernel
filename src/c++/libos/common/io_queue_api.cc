@@ -300,6 +300,20 @@ int dmtr::io_queue_api::push_tick(dmtr_qtoken_t &qtok_out, int qd, const boost::
     return 0;
 }
 
+int dmtr::io_queue_api::stop_timer(dmtr_qtoken_t &qtok_out, int qd) {
+    qtok_out = 0;
+    DMTR_TRUE(EINVAL, qd != 0);
+
+    io_queue *q = NULL;
+    DMTR_OK(get_queue(q, qd));
+    dmtr_qtoken_t qt;
+    DMTR_OK(q->new_qtoken(qt));
+    DMTR_OK(q->stop_timer(qt));
+
+    qtok_out = qt;
+    return 0;
+}
+
 int dmtr::io_queue_api::pop(dmtr_qtoken_t &qtok_out, int qd) {
     qtok_out = 0;
     DMTR_TRUE(EINVAL, qd != 0);

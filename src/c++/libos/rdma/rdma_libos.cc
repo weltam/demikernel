@@ -175,3 +175,11 @@ int dmtr_push_tick(dmtr_qtoken_t *qtok_out, int qd, const boost::chrono::nanosec
     return ioq_api->push_tick(*qtok_out, qd, timeout);
 }
 
+int dmtr_stop_timer(dmtr_qtoken_t *qtok_out, int qd) {
+    DMTR_NOTNULL(EINVAL, qtok_out);
+    DMTR_NOTNULL(EINVAL, ioq_api.get());
+
+    return ioq_api->stop_timer(*qtok_out, qd);
+}
+
+

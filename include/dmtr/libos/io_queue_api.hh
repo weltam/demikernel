@@ -56,6 +56,7 @@ class io_queue_api
     public: int close(int qd);
     public: int push(dmtr_qtoken_t &qtok_out, int qd, const dmtr_sgarray_t &sga);
     public: int push_tick(dmtr_qtoken_t &qtok_out, int qd, const boost::chrono::nanoseconds expiry);
+    public: int stop_timer(dmtr_qtoken_t &qtok_out, int qd);
     public: int pop(dmtr_qtoken_t &qtok_out, int qd);
     public: int pop(dmtr_qtoken_t &qtok_out, int qd, size_t count);
     public: int poll(dmtr_qresult_t *qr_out, dmtr_qtoken_t qt);

@@ -43,6 +43,11 @@ dmtr::timer_queue::push_tick(dmtr_qtoken_t qt, const boost::chrono::nanoseconds 
     return 0;
 }
 
+int dmtr::timer_queue::stop_timer(dmtr_qtoken_t qt) {
+    on = false;
+    return 0;
+}
+
 int dmtr::timer_queue::push_thread(task::thread_type::yield_type &yield, task::thread_type::queue_type &tq) {
     while (good())  {
         while (tq.empty()) {
@@ -84,8 +89,10 @@ int dmtr::timer_queue::pop_thread(task::thread_type::yield_type &yield, task::th
         tq.pop();
         task *t;
         DMTR_OK(get_task(t, qt));
-        
-        while (!(my_timer.has_expired())) {
+       
+        // yield when the timer hasn't expired
+        // or timer is turned off 
+        while (!(my_timer.has_expired() || !on)) {
             yield();
         }
     
@@ -115,6 +122,7 @@ int dmtr::timer_queue::poll(dmtr_qresult_t &qr_out, dmtr_qtoken_t qt) {
 
     switch (ret) {
         default:
+            std::cout << "ret: " << ret << ", on: " << on << ", expired: " << my_timer.has_expired() << std::endl;
             DMTR_FAIL(ret);
         case EAGAIN:
             break;

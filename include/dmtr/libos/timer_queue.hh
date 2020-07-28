@@ -30,6 +30,7 @@ class timer_queue : public io_queue
     // will service the push thread when push is called
     public: virtual int push(dmtr_qtoken_t qt, const dmtr_sgarray_t &sga);
     public: virtual int push_tick(dmtr_qtoken_t qt, const boost::chrono::nanoseconds expiry);
+    public: virtual int stop_timer(dmtr_qtoken_t qt);
     public: virtual int pop(dmtr_qtoken_t qt);
     public: virtual int poll(dmtr_qresult_t &qr_out, dmtr_qtoken_t qt);
     public: virtual int drop(dmtr_qtoken_t qt);
