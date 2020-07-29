@@ -31,7 +31,7 @@ dmtr::timer_queue::push(dmtr_qtoken_t qt, const dmtr_sgarray_t &sga) {
 }
 
 int
-dmtr::timer_queue::push_tick(dmtr_qtoken_t qt, const boost::chrono::nanoseconds expiry)
+dmtr::timer_queue::push_tick(dmtr_qtoken_t qt, const int expiry)
 {
     DMTR_TRUE(EINVAL, good());
     DMTR_NOTNULL(EINVAL, my_push_thread);
@@ -59,7 +59,7 @@ int dmtr::timer_queue::push_thread(task::thread_type::yield_type &yield, task::t
         task *t;
         DMTR_OK(get_task(t, qt));
 
-        const boost::chrono::nanoseconds *expiry = NULL;
+        const int *expiry = NULL;
         DMTR_TRUE(EINVAL, t->arg(expiry));
 
         my_timer.set_expiry(*expiry);

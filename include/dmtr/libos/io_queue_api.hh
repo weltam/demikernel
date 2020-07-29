@@ -9,7 +9,6 @@
 #include "io_queue.hh"
 #include "io_queue_factory.hh"
 #include <boost/atomic.hpp>
-#include <boost/chrono.hpp>
 #include <dmtr/annot.h>
 #include <memory>
 #include <unordered_map>
@@ -55,7 +54,7 @@ class io_queue_api
     public: int creat(int &qd_out, const char *pathname, mode_t mode);
     public: int close(int qd);
     public: int push(dmtr_qtoken_t &qtok_out, int qd, const dmtr_sgarray_t &sga);
-    public: int push_tick(dmtr_qtoken_t &qtok_out, int qd, const boost::chrono::nanoseconds expiry);
+    public: int push_tick(dmtr_qtoken_t &qtok_out, int qd, const int expiry);
     public: int stop_timer(dmtr_qtoken_t &qtok_out, int qd);
     public: int pop(dmtr_qtoken_t &qtok_out, int qd);
     public: int pop(dmtr_qtoken_t &qtok_out, int qd, size_t count);

@@ -31,7 +31,7 @@ class io_queue
         private: boost::chrono::steady_clock::time_point expiry;
         private: bool on;
         public: bool has_expired();
-        public: int set_expiry(boost::chrono::nanoseconds timeout);
+        public: int set_expiry(int timeout);
         public: void turn_off();
         public: timer();
     };
@@ -43,13 +43,13 @@ class io_queue
         private: int my_error;
         private: dmtr_sgarray_t my_sga_arg;
         private: io_queue *my_queue_arg;
-        private: boost::chrono::nanoseconds my_expiry_arg;
+        private: int my_expiry_arg;
 
         public: task();
         public: int initialize(io_queue &q, dmtr_qtoken_t qt, dmtr_opcode_t opcode);
         public: int initialize(io_queue &q, dmtr_qtoken_t qt, dmtr_opcode_t opcode, const dmtr_sgarray_t &arg);
         public: int initialize(io_queue &q, dmtr_qtoken_t qt, dmtr_opcode_t opcode, io_queue *arg);
-        public: int initialize(io_queue &q, dmtr_qtoken_t qt, dmtr_opcode_t opcode, const boost::chrono::nanoseconds arg);
+        public: int initialize(io_queue &q, dmtr_qtoken_t qt, dmtr_opcode_t opcode, const int arg);
         public: static int initialize_result(dmtr_qresult_t &qr_out, int qd, dmtr_qtoken_t qt);
 
         public: int poll(dmtr_qresult_t &qr_out) const;
@@ -58,7 +58,7 @@ class io_queue
         public: int complete(int error, int new_qd, const sockaddr_in &addr);
         public: bool arg(const dmtr_sgarray_t *&arg_out) const;
         public: bool arg(io_queue *&arg_out) const;
-        public: bool arg(const boost::chrono::nanoseconds *&arg_out) const;
+        public: bool arg(const int *&arg_out) const;
 
         public: bool done() const {
             return my_error != EAGAIN;
@@ -117,14 +117,14 @@ class io_queue
     public: virtual int pop(dmtr_qtoken_t qt) = 0;
     public: virtual int poll(dmtr_qresult_t &qr_out, dmtr_qtoken_t qt) = 0;
     public: virtual int drop(dmtr_qtoken_t qt);
-    public: virtual int push_tick(dmtr_qtoken_t qt, const boost::chrono::nanoseconds timeout);
+    public: virtual int push_tick(dmtr_qtoken_t qt, const int timeout);
     public: virtual int stop_timer(dmtr_qtoken_t qt);
 
     public: static int set_non_blocking(int fd);
     protected: int new_task(dmtr_qtoken_t qt, dmtr_opcode_t opcode);
     protected: int new_task(dmtr_qtoken_t qt, dmtr_opcode_t opcode, const dmtr_sgarray_t &arg);
     protected: int new_task(dmtr_qtoken_t qt, dmtr_opcode_t opcode, io_queue *arg);
-    protected: int new_task(dmtr_qtoken_t qt, dmtr_opcode_t opcode, const boost::chrono::nanoseconds expiry);
+    protected: int new_task(dmtr_qtoken_t qt, dmtr_opcode_t opcode, const int expiry);
     protected: void insert_task(dmtr_qtoken_t qt);
     protected: int get_task(task *&t_out, dmtr_qtoken_t qt);
     public: int new_qtoken(dmtr_qtoken_t &qt_out);

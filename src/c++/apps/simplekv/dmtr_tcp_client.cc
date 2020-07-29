@@ -250,7 +250,6 @@ int main(int argc, char *argv[]) {
     // initialize timer_qd
     DMTR_OK(dmtr_new_timer(&timer_qd));
 
-    boost::chrono::nanoseconds timeout { timeout_value };
     std::vector<std::string> request;
     while (getline(f, line)) {
         boost::split(request, line, [](char c){return c == ' ';});

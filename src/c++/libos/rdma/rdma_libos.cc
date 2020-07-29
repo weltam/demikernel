@@ -168,7 +168,7 @@ int dmtr_drop(dmtr_qtoken_t qt)
     return ioq_api->drop(qt);
 }
 
-int dmtr_push_tick(dmtr_qtoken_t *qtok_out, int qd, const boost::chrono::nanoseconds timeout) {
+int dmtr_push_tick(dmtr_qtoken_t *qtok_out, int qd, const int expiry) { 
     DMTR_NOTNULL(EINVAL, qtok_out);
     DMTR_NOTNULL(EINVAL, ioq_api.get());
 

@@ -25,7 +25,7 @@ std::string kv_access;
 uint64_t packet_size = 1000;
 bool check = false;
 uint32_t client_id = 0;
-uint32_t timeout_value = 2500000; // in nanoseconds
+int timeout = 2500000; // in nanoseconds
 #define FILL_CHAR 'a'
 
 using namespace boost::program_options;
@@ -44,7 +44,7 @@ void parse_args(int argc, char **argv, bool server)
         ("access", value<std::string>(), "kv access file")
         ("check", "Check that the puts and gets did the correct thing")
         ("id", value<uint32_t>(&client_id)->default_value(0), "Client id")
-        ("timeout", value<uint32_t>(&timeout_value)->default_value(2500000), "Timeout value for retries.")
+        ("timeout", value<int>(&timeout)->default_value(2500000), "Timeout value for retries.")
         ("file", value<std::string>(), "log file");
 
     variables_map vm;
@@ -117,7 +117,7 @@ void parse_args(int argc, char **argv, bool server)
     }
 
     if (vm.count("timeout")) {
-        timeout_value = vm["timeout"].as<uint32_t>();
+        timeout = vm["timeout"].as<int>();
     }
 
     if (vm.count("system")) {

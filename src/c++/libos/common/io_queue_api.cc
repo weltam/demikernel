@@ -286,7 +286,7 @@ int dmtr::io_queue_api::push(dmtr_qtoken_t &qtok_out, int qd, const dmtr_sgarray
     return 0;
 }
 
-int dmtr::io_queue_api::push_tick(dmtr_qtoken_t &qtok_out, int qd, const boost::chrono::nanoseconds expiry) {
+int dmtr::io_queue_api::push_tick(dmtr_qtoken_t &qtok_out, int qd, const int expiry) {
     qtok_out = 0;
     DMTR_TRUE(EINVAL, qd != 0);
 

@@ -14,9 +14,10 @@ dmtr::io_queue::timer::timer() :
     on(false)
 {}
 
-int dmtr::io_queue::timer::set_expiry(boost::chrono::nanoseconds timeout) {
+int dmtr::io_queue::timer::set_expiry(int timeout) {
+    boost::chrono::nanoseconds timeout_value { timeout };
     on = true;
-    expiry = boost::chrono::steady_clock::now() + timeout;
+    expiry = boost::chrono::steady_clock::now() + timeout_value;
     return 0;
 }
 
@@ -69,7 +70,7 @@ int dmtr::io_queue::task::initialize(io_queue &q, dmtr_qtoken_t qt, dmtr_opcode_
     return 0;
 }
 
-int dmtr::io_queue::task::initialize(io_queue &q, dmtr_qtoken_t qt, dmtr_opcode_t opcode, const boost::chrono::nanoseconds arg) {
+int dmtr::io_queue::task::initialize(io_queue &q, dmtr_qtoken_t qt, dmtr_opcode_t opcode, const int arg) {
     DMTR_OK(initialize(q, qt, opcode));
     my_expiry_arg = arg;
     return 0;
@@ -112,7 +113,7 @@ bool dmtr::io_queue::task::arg(io_queue *&arg_out) const {
     return true;
 }
 
-bool dmtr::io_queue::task::arg(const boost::chrono::nanoseconds *&arg_out) const {
+bool dmtr::io_queue::task::arg(const int *&arg_out) const {
 
     arg_out = &my_expiry_arg;
     return true;
@@ -173,7 +174,7 @@ int dmtr::io_queue::creat(const char *pathname, mode_t mode) {
 }
 
 
-int dmtr::io_queue::push_tick(dmtr_qtoken_t qt, const boost::chrono::nanoseconds expiry) {
+int dmtr::io_queue::push_tick(dmtr_qtoken_t qt, const int expiry) {
     return ENOTSUP;
 }
 
@@ -249,7 +250,7 @@ int dmtr::io_queue::new_task(dmtr_qtoken_t qt, dmtr_opcode_t opcode, io_queue *a
     return 0;
 }
 
-int dmtr::io_queue::new_task(dmtr_qtoken_t qt, dmtr_opcode_t opcode, const boost::chrono::nanoseconds arg) {
+int dmtr::io_queue::new_task(dmtr_qtoken_t qt, dmtr_opcode_t opcode, const int arg) {
     DMTR_TRUE(EEXIST, !has_task(qt));
     insert_task(qt);
     DMTR_OK(get_task(qt)->initialize(*this, qt, opcode, arg));
