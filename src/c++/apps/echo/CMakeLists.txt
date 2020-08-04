@@ -41,11 +41,11 @@ add_custom_target(flatc_header ALL DEPENDS ${FLATC_OUTPUT})
 set(TCP_ECHO_SERVER_SOURCES ${ECHO_APPS_DIR}/dmtr_tcp_server.cc
     ${SRC_ECHO_MSG_PROTO} ${HDR_ECHO_MSG_PROTO} ${ECHO_APPS_DIR}/protobuf.cc
     ${CAPNP_SRCS} ${ECHO_APPS_DIR}/flatbuffers.cc ${ECHO_APPS_DIR}/capnproto.cc
-    ${ECHO_APPS_DIR}/message.cc)
+    ${ECHO_APPS_DIR}/extra_malloc.cc ${ECHO_APPS_DIR}/message.cc)
 set(TCP_ECHO_CLIENT_SOURCES ${ECHO_APPS_DIR}/dmtr_tcp_client.cc 
     ${SRC_ECHO_MSG_PROTO} ${HDR_ECHO_MSG_PROTO} ${ECHO_APPS_DIR}/protobuf.cc
     ${CAPNP_SRCS} ${ECHO_APPS_DIR}/flatbuffers.cc ${ECHO_APPS_DIR}/capnproto.cc
-    ${ECHO_APPS_DIR}/message.cc)
+    ${ECHO_APPS_DIR}/extra_malloc.cc ${ECHO_APPS_DIR}/message.cc)
 set(UDP_ECHO_SERVER_SOURCES ${ECHO_APPS_DIR}/dmtr_udp_server.cc)
 set(UDP_ECHO_CLIENT_SOURCES ${ECHO_APPS_DIR}/dmtr_udp_client.cc)
 set(RAW_ECHO_SERVER_SOURCES ${ECHO_APPS_DIR}/posix_tcp_server.cc)

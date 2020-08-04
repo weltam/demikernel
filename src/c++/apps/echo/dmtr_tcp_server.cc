@@ -6,6 +6,7 @@
 #include "capnproto.hh"
 #include "flatbuffers.hh"
 #include "protobuf.hh"
+#include "extramalloc.hh"
 #include <arpa/inet.h>
 #include <boost/chrono.hpp>
 #include <boost/optional.hpp>
@@ -77,6 +78,7 @@ int main(int argc, char *argv[])
     protobuf_echo proto_data(packet_size, message);
     flatbuffers_echo flatbuffers_data(packet_size, message);
     capnproto_echo capnproto_data(packet_size, message);
+    malloc_baseline malloc_baseline_echo(packet_size, message);
 
     // set up server socket address
     struct sockaddr_in saddr = {};
@@ -135,6 +137,8 @@ int main(int argc, char *argv[])
     // initialize serialized data structure that will be sent back
     if (!run_protobuf_test) {
         // todo: maybe do something here
+    } else if (!std::strcmp(cereal_system.c_str(), "malloc_baseline")) {
+        echo = &malloc_baseline_echo;
     } else if (!std::strcmp(cereal_system.c_str(), "protobuf")) {
         std::cout << "Init'ing protobuf server side" << std::endl;
         echo = &proto_data;

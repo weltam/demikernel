@@ -21,6 +21,7 @@ class echo_message
         PROTOBUF,
         CAPNPROTO,
         FLATBUFFERS,  
+        MALLOCBASELINE,
     };
 
     public: enum msg_type {

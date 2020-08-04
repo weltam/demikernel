@@ -5,6 +5,7 @@
 #include "capnproto.hh"
 #include "flatbuffers.hh"
 #include "protobuf.hh"
+#include "extramalloc.hh"
 #include "message.hh"
 #include <arpa/inet.h>
 #include <boost/chrono.hpp>
@@ -84,12 +85,19 @@ int main(int argc, char *argv[]) {
     protobuf_echo protobuf_data(packet_size, message);
     capnproto_echo capnproto_data(packet_size, message);
     flatbuffers_echo flatbuffers_data(packet_size, message);
+    malloc_baseline malloc_baseline_echo(packet_size, message);
    
     // if not running serialization test, send normal "aaaaa";
     if (!run_protobuf_test) {
         sga.sga_numsegs = 1;
         sga.sga_segs[0].sgaseg_len = packet_size;
         sga.sga_segs[0].sgaseg_buf = generate_packet();
+    } else if (!std::strcmp(cereal_system.c_str(), "malloc_baseline")) {
+        sga.sga_numsegs = 1;
+        sga.sga_segs[0].sgaseg_len = packet_size;
+        sga.sga_segs[0].sgaseg_buf = generate_packet();
+        echo = &malloc_baseline_echo;
+        echo->serialize_message(sga);
     } else if (!std::strcmp(cereal_system.c_str(), "protobuf")) {
         echo = &protobuf_data;
         echo->serialize_message(sga);
