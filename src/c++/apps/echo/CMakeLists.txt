@@ -19,8 +19,10 @@ include_directories(${CapnProto_INCLUDE_DIR})
 
 set(ECHO_APPS_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
-protobuf_generate_cpp(SRC_ECHO_MSG_PROTO HDR_ECHO_MESSAGE_PROTO
+protobuf_generate_cpp(SRC_ECHO_MSG_PROTO HDR_ECHO_MSG_PROTO
     ${ECHO_APPS_DIR}/stress.proto)
+protobuf_generate_cpp(SRC_ECHO_MSG_BYTES_PROTO HDR_ECHO_MSG_BYTES_PROTO
+    ${ECHO_APPS_DIR}/stress_bytes.proto)
 capnp_generate_cpp(CAPNP_SRCS CAPNP_HDRS ${ECHO_APPS_DIR}/stress.capnp)
 
 include_directories(${PROJECT_BINARY_DIR})
@@ -40,10 +42,14 @@ add_custom_target(flatc_header ALL DEPENDS ${FLATC_OUTPUT})
 
 set(TCP_ECHO_SERVER_SOURCES ${ECHO_APPS_DIR}/dmtr_tcp_server.cc
     ${SRC_ECHO_MSG_PROTO} ${HDR_ECHO_MSG_PROTO} ${ECHO_APPS_DIR}/protobuf.cc
+    ${SRC_ECHO_MSG_BYTES_PROTO} ${HDR_ECHO_MSG_BYTES_PROTO}
+    ${ECHO_APPS_DIR}/protobytes.cc
     ${CAPNP_SRCS} ${ECHO_APPS_DIR}/flatbuffers.cc ${ECHO_APPS_DIR}/capnproto.cc
     ${ECHO_APPS_DIR}/extra_malloc.cc ${ECHO_APPS_DIR}/message.cc)
 set(TCP_ECHO_CLIENT_SOURCES ${ECHO_APPS_DIR}/dmtr_tcp_client.cc 
     ${SRC_ECHO_MSG_PROTO} ${HDR_ECHO_MSG_PROTO} ${ECHO_APPS_DIR}/protobuf.cc
+    ${SRC_ECHO_MSG_BYTES_PROTO} ${HDR_ECHO_MSG_BYTES_PROTO}
+    ${ECHO_APPS_DIR}/protobytes.cc
     ${CAPNP_SRCS} ${ECHO_APPS_DIR}/flatbuffers.cc ${ECHO_APPS_DIR}/capnproto.cc
     ${ECHO_APPS_DIR}/extra_malloc.cc ${ECHO_APPS_DIR}/message.cc)
 set(UDP_ECHO_SERVER_SOURCES ${ECHO_APPS_DIR}/dmtr_udp_server.cc)

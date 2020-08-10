@@ -4,8 +4,9 @@
 #include "common.hh"
 #include "message.hh"
 #include "capnproto.hh"
-#include "flatbuffers.hh"
+//#include "flatbuffers.hh"
 #include "protobuf.hh"
+#include "protobytes.hh"
 #include "extramalloc.hh"
 #include <arpa/inet.h>
 #include <boost/chrono.hpp>
@@ -30,7 +31,7 @@
 #include <string.h>
 
 
-//#define DMTR_PROFILE
+#define DMTR_PROFILE
 // #define OPEN2
 // general file descriptors
 int lqd = 0;
@@ -38,6 +39,8 @@ int fqd = 0;
 uint64_t sent = 0;
 uint64_t recved = 0;
 echo_message *echo = NULL;
+bool free_push = false; // need to free push buffers
+bool is_malloc_baseline = false; // malloc baseline also has different freeing behavior
 
 #ifdef DMTR_PROFILE
 dmtr_latency_t *pop_latency = NULL;
@@ -76,7 +79,8 @@ int main(int argc, char *argv[])
 
     // setup protobuf, capn proto and flatbuffers data structures
     protobuf_echo proto_data(packet_size, message);
-    flatbuffers_echo flatbuffers_data(packet_size, message);
+    protobuf_bytes_echo proto_bytes_data(packet_size, message);
+    //flatbuffers_echo flatbuffers_data(packet_size, message);
     capnproto_echo capnproto_data(packet_size, message);
     malloc_baseline malloc_baseline_echo(packet_size, message);
 
@@ -114,6 +118,7 @@ int main(int argc, char *argv[])
     std::vector<dmtr_qtoken_t> tokens;
     dmtr_qtoken_t push_tokens[256];
     dmtr_sgarray_t popped_buffers[256];
+    dmtr_sgarray_t pushed_buffers[256];
     memset(push_tokens, 0, 256 * sizeof(dmtr_qtoken_t));
     dmtr_qtoken_t qtemp;
 
@@ -138,14 +143,19 @@ int main(int argc, char *argv[])
     if (!run_protobuf_test) {
         // todo: maybe do something here
     } else if (!std::strcmp(cereal_system.c_str(), "malloc_baseline")) {
+        is_malloc_baseline = true;
         echo = &malloc_baseline_echo;
     } else if (!std::strcmp(cereal_system.c_str(), "protobuf")) {
-        std::cout << "Init'ing protobuf server side" << std::endl;
+        free_push = true;
         echo = &proto_data;
+    } else if (!std::strcmp(cereal_system.c_str(), "protobytes")) {
+        free_push = true;
+        echo = &proto_bytes_data;
     } else if (!std::strcmp(cereal_system.c_str(), "capnproto")) {
         echo = &capnproto_data;
     } else if (!std::strcmp(cereal_system.c_str(), "flatbuffers")) {
-        echo = &flatbuffers_data;
+        exit(1);
+        //echo = &flatbuffers_data;
     } else {
         std::cerr << "Serialization cereal_system " << cereal_system  << " unknown." << std::endl;
         exit(1);
@@ -228,9 +238,14 @@ int main(int argc, char *argv[])
                 if (push_tokens[idx] != 0) {
                     // should be done by now if we already got a response
                     DMTR_OK(dmtr_drop(push_tokens[idx]));
-                    DMTR_OK(dmtr_sgafree(&popped_buffers[idx]));
-                    popped_buffers[idx] = wait_out.qr_value.sga;
                 }
+                DMTR_OK(dmtr_sgafree(&popped_buffers[idx]));
+                popped_buffers[idx] = wait_out.qr_value.sga;
+                // only protobuf allocates extra pointers to free
+                if (free_push) {
+                    DMTR_OK(dmtr_sgafree(&pushed_buffers[idx]));
+                }
+
                 push_tokens[idx] = 0;
                 
                 // reserialize the message to send back into the array
@@ -238,7 +253,7 @@ int main(int argc, char *argv[])
 #ifdef DMTR_PROFILE
                     auto start_serialize = boost::chrono::steady_clock::now();
 #endif
-                    echo->serialize_message(wait_out.qr_value.sga);
+                    echo->serialize_message(pushed_buffers[idx]);
 #ifdef DMTR_PROFILE
                     auto end_serialize = boost::chrono::steady_clock::now();
                     auto serialize_time = end_serialize - start_serialize;
@@ -247,7 +262,13 @@ int main(int argc, char *argv[])
                     DMTR_OK(dmtr_record_latency(cereal_latency, total_serialization_overhead.count()));
 #endif
                 }
-                DMTR_OK(dmtr_push(&push_tokens[idx], wait_out.qr_qd, &wait_out.qr_value.sga));
+                if (run_protobuf_test && !is_malloc_baseline) {
+                    DMTR_OK(dmtr_push(&push_tokens[idx], wait_out.qr_qd, &pushed_buffers[idx]));
+                    std::cout << "Ran serialize" << std::endl;
+                } else {
+                    DMTR_OK(dmtr_push(&push_tokens[idx], wait_out.qr_qd, &wait_out.qr_value.sga));
+                }
+
                 sent++;
 #ifdef DMTR_PROFILE
                 auto push_dt = boost::chrono::steady_clock::now() - t0;

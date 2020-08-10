@@ -3,8 +3,9 @@
 
 #include "common.hh"
 #include "capnproto.hh"
-#include "flatbuffers.hh"
+//#include "flatbuffers.hh"
 #include "protobuf.hh"
+#include "protobytes.hh"
 #include "extramalloc.hh"
 #include "message.hh"
 #include <arpa/inet.h>
@@ -83,8 +84,9 @@ int main(int argc, char *argv[]) {
 
     // init serialization messages so variables aren't freed prematurely
     protobuf_echo protobuf_data(packet_size, message);
+    protobuf_bytes_echo proto_bytes_data(packet_size, message);
     capnproto_echo capnproto_data(packet_size, message);
-    flatbuffers_echo flatbuffers_data(packet_size, message);
+    //flatbuffers_echo flatbuffers_data(packet_size, message);
     malloc_baseline malloc_baseline_echo(packet_size, message);
    
     // if not running serialization test, send normal "aaaaa";
@@ -101,13 +103,16 @@ int main(int argc, char *argv[]) {
     } else if (!std::strcmp(cereal_system.c_str(), "protobuf")) {
         echo = &protobuf_data;
         echo->serialize_message(sga);
+    } else if (!std::strcmp(cereal_system.c_str(), "protobytes")) {
+        echo = &proto_bytes_data;
+        echo->serialize_message(sga);
     } else if (!std::strcmp(cereal_system.c_str(), "capnproto")) {
-        std::cout << "Init'ing capnproto data" << std::endl;
         echo = &capnproto_data;
         echo->serialize_message(sga);
     } else if (!std::strcmp(cereal_system.c_str(), "flatbuffers")) {
-        echo = &flatbuffers_data;
-        echo->serialize_message(sga);
+        exit(1);
+        //echo = &flatbuffers_data;
+        //echo->serialize_message(sga);
     } else {
         std::cerr << "Serialization cereal_system " << cereal_system << " unknown." << std::endl;
         exit(1);

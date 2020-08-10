@@ -90,8 +90,8 @@ void flatbuffers_echo::serialize_message(dmtr_sgarray_t &sga) {
 }
 
 void flatbuffers_echo::deserialize_message(dmtr_sgarray_t &sga) {
-    assert(sga.sga_numsegs == 2);
-    uint8_t *ptr = (uint8_t *)sga.sga_segs[0].sgaseg_buf;
+    assert(sga.sga_numsegs == 1);
+    /*uint8_t *ptr = (uint8_t *)sga.sga_segs[0].sgaseg_buf;
     
     size_t totalLen = *(size_t *)ptr;
     ptr += sizeof(totalLen);
@@ -102,14 +102,14 @@ void flatbuffers_echo::deserialize_message(dmtr_sgarray_t &sga) {
     ptr += typeLen;
     
     size_t dataLen = *(size_t *)ptr;
-    ptr += sizeof(dataLen);
+    ptr += sizeof(dataLen);*/
     
-    uint8_t *data_ptr = (uint8_t *)(sga.sga_segs[1].sgaseg_buf);
+    uint8_t *data_ptr = (uint8_t *)(sga.sga_segs[0].sgaseg_buf);
     handle_msg(data_ptr);
 }
 
 void flatbuffers_echo::encode_msg(dmtr_sgarray_t &sga, uint8_t* data_buf, int size) {
-    void *p = NULL;
+    /*void *p = NULL;
     size_t dataLen = (size_t) size;
     size_t typeLen = my_message_type.length();
     // everything without the actual data
@@ -139,11 +139,13 @@ void flatbuffers_echo::encode_msg(dmtr_sgarray_t &sga, uint8_t* data_buf, int si
 
     *((size_t *) ptr) = dataLen;
     ptr += sizeof(dataLen);
-    assert((size_t)(ptr-buf) < totalLen);
+    assert((size_t)(ptr-buf) < totalLen);*/
 
     // write the data into the 2nd buf ptr
-    sga.sga_segs[1].sgaseg_len = dataLen;
-    sga.sga_segs[1].sgaseg_buf = (void*) data_buf;  // maybe needs a cast to void*?
+    sga.sga_numsegs = 1;
+    size_t dataLen = (size_t) size;
+    sga.sga_segs[0].sgaseg_len = dataLen;
+    sga.sga_segs[0].sgaseg_buf = (void*) data_buf;  // maybe needs a cast to void*?
 }
 
 template<class T>
@@ -186,14 +188,16 @@ void flatbuffers_echo::handle_msg(uint8_t* buf) {
 }
 
 void flatbuffers_echo::build_get() {
-    auto key = getBuilder.CreateString(generate_string(my_field_size));
+    auto string_field = generate_string(my_field_size);
+    auto key = getBuilder.CreateString(string_field);
     getMsg.add_key(key);
     auto final_get = getMsg.Finish();
     getBuilder.Finish(final_get);
 }
 
 void flatbuffers_echo::build_put() {
-    auto key = putBuilder.CreateString(generate_string(my_field_size / 2));
+    auto string_field = generate_string(my_field_size);
+    auto key = putBuilder.CreateString(string_field);
     putMsg.add_key(key);
     putMsg.add_value(key);
     auto final_put = putMsg.Finish();
@@ -201,7 +205,8 @@ void flatbuffers_echo::build_put() {
 }
 
 void flatbuffers_echo::build_msg1L() {
-    auto leaf = msg1LBuilder.CreateString(generate_string(my_field_size));
+    auto string_field = generate_string(my_field_size);
+    auto leaf = msg1LBuilder.CreateString(string_field);
     auto left = CreateGetMessageFB(msg1LBuilder, leaf);
     auto right = CreateGetMessageFB(msg1LBuilder, leaf);
     msg1L.add_left(left);
@@ -211,7 +216,8 @@ void flatbuffers_echo::build_msg1L() {
 }
 
 void flatbuffers_echo::build_msg2L() {
-    auto leaf = msg2LBuilder.CreateString(generate_string(my_field_size));
+    auto string_field = generate_string(my_field_size);
+    auto leaf = msg2LBuilder.CreateString(string_field);
     auto getLeaf = CreateGetMessageFB(msg2LBuilder, leaf);
     auto left = CreateMsg1LFB(msg2LBuilder, getLeaf, getLeaf);
     auto right = CreateMsg1LFB(msg2LBuilder, getLeaf, getLeaf);
@@ -223,7 +229,8 @@ void flatbuffers_echo::build_msg2L() {
 }
 
 void flatbuffers_echo::build_msg3L() {
-    auto leaf = msg3LBuilder.CreateString(generate_string(my_field_size));
+    auto string_field = generate_string(my_field_size);
+    auto leaf = msg3LBuilder.CreateString(string_field);
     auto getLeaf = CreateGetMessageFB(msg3LBuilder, leaf);
     auto msg1LLeaf = CreateMsg1LFB(msg3LBuilder, getLeaf, getLeaf);
     auto left = CreateMsg2LFB(msg3LBuilder, msg1LLeaf, msg1LLeaf);
@@ -236,7 +243,8 @@ void flatbuffers_echo::build_msg3L() {
 }
 
 void flatbuffers_echo::build_msg4L() {
-    auto leaf = msg4LBuilder.CreateString(generate_string(my_field_size));
+    auto string_field = generate_string(my_field_size);
+    auto leaf = msg4LBuilder.CreateString(string_field);
     auto getLeaf = CreateGetMessageFB(msg4LBuilder, leaf);
     auto msg1LLeaf = CreateMsg1LFB(msg4LBuilder, getLeaf, getLeaf);
     auto msg2LLeaf = CreateMsg2LFB(msg4LBuilder, msg1LLeaf, msg1LLeaf);
@@ -250,7 +258,8 @@ void flatbuffers_echo::build_msg4L() {
 }
 
 void flatbuffers_echo::build_msg5L() {
-    auto leaf = msg5LBuilder.CreateString(generate_string(my_field_size));
+    auto string_field = generate_string(my_field_size);
+    auto leaf = msg5LBuilder.CreateString(string_field);
     auto getLeaf = CreateGetMessageFB(msg5LBuilder, leaf);
     auto msg1LLeaf = CreateMsg1LFB(msg5LBuilder, getLeaf, getLeaf);
     auto msg2LLeaf = CreateMsg2LFB(msg5LBuilder, msg1LLeaf, msg1LLeaf);

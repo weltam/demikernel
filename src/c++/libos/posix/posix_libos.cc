@@ -8,6 +8,7 @@
 #include <dmtr/annot.h>
 #include <dmtr/libos.h>
 #include <dmtr/libos/memory_queue.hh>
+#include <dmtr/libos/timer_queue.hh>
 #include <dmtr/libos/io_queue_api.hh>
 
 #include <memory>

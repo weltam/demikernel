@@ -26,6 +26,13 @@ class protobuf_echo : public echo_message
     private: Msg4L msg4L;
     private: Msg5L msg5L;
 
+    private: GetMessage getMsg_deser;
+    private: PutMessage putMsg_deser;
+    private: Msg1L msg1L_deser;
+    private: Msg2L msg2L_deser;
+    private: Msg3L msg3L_deser;
+    private: Msg4L msg4L_deser;
+    private: Msg5L msg5L_deser;
     public: protobuf_echo(uint32_t field_size, string message_type);
 
     public: virtual void serialize_message(dmtr_sgarray_t &sga);

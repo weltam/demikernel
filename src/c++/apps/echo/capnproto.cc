@@ -81,7 +81,7 @@ void capnproto_echo::deserialize_message(dmtr_sgarray_t &sga) {
     Msg3LCP::Reader local_msg3L;
     Msg4LCP::Reader local_msg4L;
     Msg5LCP::Reader local_msg5L;
-    auto segment_array = kj::heapArray<kj::ArrayPtr<const capnp::word>>(sga.sga_numsegs - 1);
+    auto segment_array = kj::heapArray<kj::ArrayPtr<const capnp::word>>(sga.sga_numsegs);
     decode_msg(sga, segment_array.begin());
 
     capnp::SegmentArrayMessageReader message(segment_array);
@@ -113,8 +113,9 @@ void capnproto_echo::deserialize_message(dmtr_sgarray_t &sga) {
 void capnproto_echo::encode_msg(dmtr_sgarray_t &sga, kj::ArrayPtr<const kj::ArrayPtr<const capnp::word>> segments) {
     // check if we can even do the correc tthings
     capnp::SegmentArrayMessageReader message(segments);
-    sga.sga_numsegs = segments.size() + 1;
-    void *p = NULL;
+    //sga.sga_numsegs = segments.size() + 1;
+    sga.sga_numsegs = segments.size();
+    /*void *p = NULL;
     size_t typeLen = my_message_type.length();
     size_t totalLen = (typeLen + sizeof(typeLen));
     dmtr_malloc(&p, totalLen);
@@ -130,14 +131,14 @@ void capnproto_echo::encode_msg(dmtr_sgarray_t &sga, kj::ArrayPtr<const kj::Arra
     
     memcpy(ptr, my_message_type.c_str(), typeLen);
     ptr += typeLen;
-    assert((size_t)(ptr-buf) < totalLen);
+    assert((size_t)(ptr-buf) < totalLen);*/
 
     // write the data into the next buffers
     for (size_t i = 0; i < segments.size(); i++) {
         kj::ArrayPtr<const capnp::word> segment = (segments[i]);
         kj::ArrayPtr<const kj::byte> bytes = segment.asBytes();
-        sga.sga_segs[i+1].sgaseg_len = bytes.size();
-        sga.sga_segs[i+1].sgaseg_buf = (void *) bytes.begin();
+        sga.sga_segs[i].sgaseg_len = bytes.size();
+        sga.sga_segs[i].sgaseg_buf = (void *) bytes.begin();
     }
 
     deserialize_message(sga);
@@ -145,7 +146,7 @@ void capnproto_echo::encode_msg(dmtr_sgarray_t &sga, kj::ArrayPtr<const kj::Arra
 
 void capnproto_echo::decode_msg(dmtr_sgarray_t &sga, kj::ArrayPtr<const capnp::word>* segments) {
     auto current_segment = segments; 
-    for (size_t i = 1; i < sga.sga_numsegs; i++) {
+    for (size_t i = 0; i < sga.sga_numsegs; i++) {
         unsigned char* segment = reinterpret_cast<unsigned char *>(sga.sga_segs[i].sgaseg_buf);
         const capnp::word* bytes = reinterpret_cast<const capnp::word*>(segment);
         size_t word_size = sga.sga_segs[i].sgaseg_len/sizeof(capnp::word);

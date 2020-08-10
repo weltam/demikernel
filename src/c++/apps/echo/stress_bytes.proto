@@ -1,17 +1,17 @@
 syntax = "proto3";
 
-package stress;
+package stress_bytes;
 
 // simplest message that can be made arbitrarily large
 message GetMessage {
-    string key = 1;
+    bytes key = 1;
 }
 
 // simple message that can be made arbitrarily large
-// by making the strings arbitrarily large
+// by making the bytess arbitrarily large
 message PutMessage {
-    string key = 1;
-    string value = 2;
+    bytes key = 1;
+    bytes value = 2;
 }
 
 // two leaves
