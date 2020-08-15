@@ -30,6 +30,7 @@ class capnproto_echo: public echo_message
     public: void encode_msg(dmtr_sgarray_t &sga, kj::ArrayPtr<const kj::ArrayPtr<const capnp::word>> segments);
 
     public: void decode_msg(dmtr_sgarray_t &sga, kj::ArrayPtr<const capnp::word>* segments);
+    public: void print_counters() {}
 
     private: void build_get();
     private: void recursive_get(GetMessageCP::Builder builder, uint32_t field_size);

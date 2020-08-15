@@ -3,10 +3,13 @@
 
 #include "common.hh"
 #include "capnproto.hh"
-//#include "flatbuffers.hh"
+#include "flatbuffers.hh"
 #include "protobuf.hh"
 #include "protobytes.hh"
-#include "extramalloc.hh"
+#include "extra_malloc.hh"
+#include "extra_malloc_no_str.hh"
+#include "extra_malloc_no_malloc.hh"
+#include "extra_malloc_single_memcpy.hh"
 #include "message.hh"
 #include <arpa/inet.h>
 #include <boost/chrono.hpp>
@@ -38,11 +41,14 @@ dmtr_latency_t *latency = NULL;
 int qd;
 dmtr_sgarray_t sga = {};
 echo_message *echo = NULL;
+bool free_buf = false;
 //#define TRAILING_REQUESTS 
 //#define WAIT_FOR_ALL
 void finish() {
     std::cerr << "Sent: " << sent << "  Recved: " << recved << std::endl;
-    dmtr_sgafree(&sga);
+    if (free_buf) {
+        dmtr_sgafree(&sga);
+    }
     dmtr_close(qd);
     dmtr_dump_latency(stderr, latency);
 }
@@ -86,33 +92,50 @@ int main(int argc, char *argv[]) {
     protobuf_echo protobuf_data(packet_size, message);
     protobuf_bytes_echo proto_bytes_data(packet_size, message);
     capnproto_echo capnproto_data(packet_size, message);
-    //flatbuffers_echo flatbuffers_data(packet_size, message);
+    flatbuffers_echo flatbuffers_data(packet_size, message);
     malloc_baseline malloc_baseline_echo(packet_size, message);
+    malloc_baseline_no_str malloc_baseline_no_str(packet_size, message);
+    malloc_baseline_no_malloc malloc_baseline_no_malloc(packet_size, message);
+    malloc_baseline_single_memcpy malloc_baseline_single_memcpy(packet_size, message);
    
     // if not running serialization test, send normal "aaaaa";
     if (!run_protobuf_test) {
-        sga.sga_numsegs = 1;
-        sga.sga_segs[0].sgaseg_len = packet_size;
-        sga.sga_segs[0].sgaseg_buf = generate_packet();
+        fill_in_sga(sga, sga_size);
+        free_buf = true;
     } else if (!std::strcmp(cereal_system.c_str(), "malloc_baseline")) {
-        sga.sga_numsegs = 1;
-        sga.sga_segs[0].sgaseg_len = packet_size;
-        sga.sga_segs[0].sgaseg_buf = generate_packet();
+        fill_in_sga(sga, sga_size);
         echo = &malloc_baseline_echo;
         echo->serialize_message(sga);
+        free_buf = true;
+    } else if (!std::strcmp(cereal_system.c_str(), "malloc_no_str")) {
+        fill_in_sga(sga, sga_size);
+        echo = &malloc_baseline_no_str;
+        echo->serialize_message(sga);
+        free_buf = true;
+    } else if (!std::strcmp(cereal_system.c_str(), "memcpy")) {
+        fill_in_sga(sga, sga_size);
+        echo = &malloc_baseline_no_malloc;
+        echo->serialize_message(sga);
+        free_buf = true;
+    } else if (!std::strcmp(cereal_system.c_str(), "single_memcpy")) {
+        fill_in_sga(sga, sga_size);
+        echo = &malloc_baseline_single_memcpy;
+        echo->serialize_message(sga);
+        free_buf = true;
     } else if (!std::strcmp(cereal_system.c_str(), "protobuf")) {
         echo = &protobuf_data;
         echo->serialize_message(sga);
+        free_buf = true;
     } else if (!std::strcmp(cereal_system.c_str(), "protobytes")) {
         echo = &proto_bytes_data;
         echo->serialize_message(sga);
+        free_buf = true;
     } else if (!std::strcmp(cereal_system.c_str(), "capnproto")) {
         echo = &capnproto_data;
         echo->serialize_message(sga);
     } else if (!std::strcmp(cereal_system.c_str(), "flatbuffers")) {
-        exit(1);
-        //echo = &flatbuffers_data;
-        //echo->serialize_message(sga);
+        echo = &flatbuffers_data;
+        echo->serialize_message(sga);
     } else {
         std::cerr << "Serialization cereal_system " << cereal_system << " unknown." << std::endl;
         exit(1);
@@ -210,8 +233,6 @@ int main(int argc, char *argv[]) {
                 iterations--;
 
                 // finished a full echo
-                // free the allocated sga
-                DMTR_OK(dmtr_sgafree(&wait_out.qr_value.sga));
                 // drop the push token from this echo
                 if (push_tokens[c] != 0) {
                     DMTR_OK(dmtr_drop(push_tokens[c]));

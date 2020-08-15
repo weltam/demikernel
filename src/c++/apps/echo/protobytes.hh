@@ -10,6 +10,7 @@
 #include <string>
 #include <dmtr/sga.h>
 #include <sys/types.h>
+#include <dmtr/latency.h>
 
 using namespace std;
 
@@ -32,6 +33,11 @@ class protobuf_bytes_echo : public echo_message
     private: stress_bytes::Msg3L msg3L_deser;
     private: stress_bytes::Msg4L msg4L_deser;
     private: stress_bytes::Msg5L msg5L_deser;
+    private: dmtr_latency_t* serialize_latency;
+    private: dmtr_latency_t* parse_latency;
+    private: dmtr_latency_t* encode_malloc_latency;
+    private: dmtr_latency_t* encode_memcpy_latency;
+    private: dmtr_latency_t* decode_string_latency;
 
     public: protobuf_bytes_echo(uint32_t field_size, string message_type);
 
@@ -40,6 +46,7 @@ class protobuf_bytes_echo : public echo_message
 
     public: void encode_msg(dmtr_sgarray_t &sga, const Message& msg);
     public: void handle_message(const string& msg);
+    public: void print_counters();
 };
 
 

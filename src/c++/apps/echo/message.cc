@@ -7,6 +7,12 @@
 #include "message.hh"
 #define FILL_CHAR 'a'
 
+uint64_t rdtsc() {
+    unsigned int lo, hi;
+    __asm__ __volatile__("rdtsc" : "=a" (lo), "=d" (hi));
+    return ((uint64_t)hi << 32) | lo;
+}
+
 string generate_string(uint32_t field_size) {
     return string(field_size, FILL_CHAR);
 }

@@ -8,6 +8,7 @@
 #include <string>
 #include <assert.h>
 #define FILL_CHAR 'a'
+#define DMTR_PROFILE
 
 /*
  * Header Format (protobuf):
@@ -90,7 +91,12 @@ protobuf_bytes_echo::protobuf_bytes_echo(uint32_t field_size, string message_typ
     msg2L_deser(),
     msg3L_deser(),
     msg4L_deser(),
-    msg5L_deser()
+    msg5L_deser(),
+    serialize_latency(NULL),
+    parse_latency(NULL),
+    encode_malloc_latency(NULL),
+    encode_memcpy_latency(NULL),
+    decode_string_latency(NULL)
     
 {
     switch (my_msg_enum) {
@@ -116,10 +122,20 @@ protobuf_bytes_echo::protobuf_bytes_echo(uint32_t field_size, string message_typ
             msg5L = *five_level_bytes(field_size);
             break;
     }
+#ifdef DMTR_PROFILE
+    dmtr_new_latency(&serialize_latency, "Protobytes serialize count");
+    dmtr_new_latency(&parse_latency, "Protobytes parse count");
+    dmtr_new_latency(&encode_malloc_latency, "Encode malloc count");
+    dmtr_new_latency(&encode_memcpy_latency, "Encode memcpy count");
+    dmtr_new_latency(&decode_string_latency, "Decode string count");
+#endif
 
 }
 
 void protobuf_bytes_echo::handle_message(const string& msg) {
+#ifdef DMTR_PROFILE
+    auto start = rdtsc();
+#endif
     switch (my_msg_enum) {
         case echo_message::msg_type::GET:
             getMsg_deser.ParseFromString(msg);
@@ -143,6 +159,9 @@ void protobuf_bytes_echo::handle_message(const string& msg) {
             msg5L_deser.ParseFromString(msg);
             break;
     }
+#ifdef DMTR_PROFILE
+    dmtr_record_latency(parse_latency, rdtsc() - start);
+#endif
 }
 
 void protobuf_bytes_echo::deserialize_message(dmtr_sgarray_t &sga) {
@@ -160,7 +179,13 @@ void protobuf_bytes_echo::deserialize_message(dmtr_sgarray_t &sga) {
     size_t dataLen = *(size_t *)ptr;
     ptr += sizeof(dataLen);
     string data((char *)ptr, dataLen);*/
+#ifdef DMTR_PROFILE
+    auto start = rdtsc();
+#endif
     string data((char *)sga.sga_segs[0].sgaseg_buf, sga.sga_segs[0].sgaseg_len);
+#ifdef DMTR_PROFILE
+    dmtr_record_latency(decode_string_latency, rdtsc() - start);
+#endif
     //ptr += dataLen;
     handle_message(data);
 }
@@ -169,15 +194,32 @@ void protobuf_bytes_echo::encode_msg(dmtr_sgarray_t &sga,
                                 const Message& msg) {
     sga.sga_numsegs = 1;
     void *p = NULL;
-    
+#ifdef DMTR_PROFILE
+    auto start_serialize = rdtsc();
+#endif
     string data = msg.SerializeAsString();
+#ifdef DMTR_PROFILE
+    dmtr_record_latency(serialize_latency, rdtsc() - start_serialize);
+#endif
     size_t dataLen = data.length();
 
     sga.sga_segs[0].sgaseg_len = dataLen;
+#ifdef DMTR_PROFILE
+    auto start_malloc = rdtsc();
+#endif
     dmtr_malloc(&p, dataLen);
+#ifdef DMTR_PROFILE
+    dmtr_record_latency(encode_malloc_latency, rdtsc() - start_malloc);
+#endif
     assert(p != NULL);
     sga.sga_segs[0].sgaseg_buf = p;
+#ifdef DMTR_PROFILE
+    auto start_memcpy = rdtsc();
+#endif
     memcpy(p, (void *)data.c_str(), dataLen);
+#ifdef DMTR_PROFILE
+    dmtr_record_latency(encode_memcpy_latency, rdtsc() - start_memcpy);
+#endif
     /*size_t typeLen = my_message_type.length();
     size_t totalLen = (typeLen + sizeof(typeLen) +
                         dataLen + sizeof(dataLen) +
@@ -240,3 +282,12 @@ void protobuf_bytes_echo::serialize_message(dmtr_sgarray_t &sga) {
     }
 }
 
+void protobuf_bytes_echo::print_counters() {
+#ifdef DMTR_PROFILE
+    dmtr_dump_latency(stderr, serialize_latency);
+    dmtr_dump_latency(stderr, parse_latency);
+    dmtr_dump_latency(stderr, encode_malloc_latency);
+    dmtr_dump_latency(stderr, encode_memcpy_latency);
+    dmtr_dump_latency(stderr, decode_string_latency);
+#endif
+}

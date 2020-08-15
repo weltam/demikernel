@@ -12,6 +12,8 @@
 #define FILL_CHAR 'a'
 using namespace std;
 
+uint64_t rdtsc();
+
 string generate_string(uint32_t field_size);
 
 
@@ -57,6 +59,8 @@ class echo_message
     public: virtual void serialize_message(dmtr_sgarray_t &sga) = 0;
     // decode and deserialize message
     public: virtual void deserialize_message(dmtr_sgarray_t &sga) = 0;
+    // print extra counters out
+    public: virtual void print_counters() = 0;
 };
 
 #endif

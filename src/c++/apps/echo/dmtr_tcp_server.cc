@@ -4,10 +4,13 @@
 #include "common.hh"
 #include "message.hh"
 #include "capnproto.hh"
-//#include "flatbuffers.hh"
+#include "flatbuffers.hh"
 #include "protobuf.hh"
 #include "protobytes.hh"
-#include "extramalloc.hh"
+#include "extra_malloc.hh"
+#include "extra_malloc_no_str.hh"
+#include "extra_malloc_no_malloc.hh"
+#include "extra_malloc_single_memcpy.hh"
 #include <arpa/inet.h>
 #include <boost/chrono.hpp>
 #include <boost/optional.hpp>
@@ -50,6 +53,9 @@ dmtr_latency_t *file_log_latency = NULL;
 dmtr_latency_t *deserialize_latency = NULL;
 dmtr_latency_t *serialize_latency = NULL;
 dmtr_latency_t *cereal_latency = NULL;
+dmtr_latency_t *deserialize_counter = NULL;
+dmtr_latency_t *serialize_counter = NULL;
+dmtr_latency_t *cereal_counter = NULL;
 #endif
 
 void sig_handler(int signo)
@@ -63,6 +69,10 @@ void sig_handler(int signo)
         dmtr_dump_latency(stderr, deserialize_latency);
         dmtr_dump_latency(stderr, serialize_latency);
         dmtr_dump_latency(stderr, cereal_latency);
+        dmtr_dump_latency(stderr, deserialize_counter);
+        dmtr_dump_latency(stderr, serialize_counter);
+        dmtr_dump_latency(stderr, cereal_counter);
+        echo->print_counters();
     } 
 #endif
 
@@ -80,9 +90,12 @@ int main(int argc, char *argv[])
     // setup protobuf, capn proto and flatbuffers data structures
     protobuf_echo proto_data(packet_size, message);
     protobuf_bytes_echo proto_bytes_data(packet_size, message);
-    //flatbuffers_echo flatbuffers_data(packet_size, message);
+    flatbuffers_echo flatbuffers_data(packet_size, message);
     capnproto_echo capnproto_data(packet_size, message);
     malloc_baseline malloc_baseline_echo(packet_size, message);
+    malloc_baseline_no_str malloc_baseline_no_str(packet_size, message);
+    malloc_baseline_no_malloc malloc_baseline_no_malloc(packet_size, message);
+    malloc_baseline_single_memcpy malloc_baseline_single_memcpy(packet_size, message);
 
     // set up server socket address
     struct sockaddr_in saddr = {};
@@ -111,6 +124,9 @@ int main(int argc, char *argv[])
         DMTR_OK(dmtr_new_latency(&deserialize_latency, "deserialize server"));
         DMTR_OK(dmtr_new_latency(&serialize_latency, "serialize server"));
         DMTR_OK(dmtr_new_latency(&cereal_latency, "total cereal server"));
+        DMTR_OK(dmtr_new_latency(&deserialize_counter, "deserialize rdtsc"));
+        DMTR_OK(dmtr_new_latency(&serialize_counter, "serialize rdtsc"));
+        DMTR_OK(dmtr_new_latency(&cereal_counter, "total cereal rdtsc"));
     }
 #endif
 
@@ -145,6 +161,15 @@ int main(int argc, char *argv[])
     } else if (!std::strcmp(cereal_system.c_str(), "malloc_baseline")) {
         is_malloc_baseline = true;
         echo = &malloc_baseline_echo;
+    } else if (!std::strcmp(cereal_system.c_str(), "malloc_no_str")) {
+        is_malloc_baseline = true;
+        echo = &malloc_baseline_no_str;
+    } else if (!std::strcmp(cereal_system.c_str(), "memcpy")) {
+        is_malloc_baseline = true;
+        echo = &malloc_baseline_no_malloc;
+    } else if (!std::strcmp(cereal_system.c_str(), "single_memcpy")) {
+        is_malloc_baseline = true;
+        echo = &malloc_baseline_single_memcpy;
     } else if (!std::strcmp(cereal_system.c_str(), "protobuf")) {
         free_push = true;
         echo = &proto_data;
@@ -154,8 +179,7 @@ int main(int argc, char *argv[])
     } else if (!std::strcmp(cereal_system.c_str(), "capnproto")) {
         echo = &capnproto_data;
     } else if (!std::strcmp(cereal_system.c_str(), "flatbuffers")) {
-        exit(1);
-        //echo = &flatbuffers_data;
+        echo = &flatbuffers_data;
     } else {
         std::cerr << "Serialization cereal_system " << cereal_system  << " unknown." << std::endl;
         exit(1);
@@ -198,6 +222,7 @@ int main(int argc, char *argv[])
                 //DMTR_TRUE(EINVAL, wait_out.qr_value.sga.sga_numsegs == 1);
                 recved++;
 #ifdef DMTR_PROFILE
+                auto start_counter = rdtsc();
                 auto start = boost::chrono::steady_clock::now();
 #endif
                 if (run_protobuf_test) {
@@ -205,7 +230,9 @@ int main(int argc, char *argv[])
                     echo->deserialize_message(wait_out.qr_value.sga);
 #ifdef DMTR_PROFILE
                     auto deserialize_time = boost::chrono::steady_clock::now() - start;
+                    auto deserialize_count = rdtsc() - start_counter;
                     DMTR_OK(dmtr_record_latency(deserialize_latency, deserialize_time.count()));
+                    DMTR_OK(dmtr_record_latency(deserialize_counter, deserialize_count));
 #endif
                 }
 
@@ -239,6 +266,7 @@ int main(int argc, char *argv[])
                     // should be done by now if we already got a response
                     DMTR_OK(dmtr_drop(push_tokens[idx]));
                 }
+                // free last recv buffer
                 DMTR_OK(dmtr_sgafree(&popped_buffers[idx]));
                 popped_buffers[idx] = wait_out.qr_value.sga;
                 // only protobuf allocates extra pointers to free
@@ -251,20 +279,25 @@ int main(int argc, char *argv[])
                 // reserialize the message to send back into the array
                 if (run_protobuf_test) {
 #ifdef DMTR_PROFILE
+                    auto start_serialize_counter = rdtsc();
                     auto start_serialize = boost::chrono::steady_clock::now();
 #endif
                     echo->serialize_message(pushed_buffers[idx]);
 #ifdef DMTR_PROFILE
                     auto end_serialize = boost::chrono::steady_clock::now();
+                    auto end_serialize_counter = rdtsc();
                     auto serialize_time = end_serialize - start_serialize;
+                    auto total_time = end_serialize - start;
+                    auto serialize_count = end_serialize_counter - start_serialize_counter;
+                    auto total_count = end_serialize_counter - start_counter;
                     DMTR_OK(dmtr_record_latency(serialize_latency, serialize_time.count()));
-                    auto total_serialization_overhead = end_serialize - start;
-                    DMTR_OK(dmtr_record_latency(cereal_latency, total_serialization_overhead.count()));
+                    DMTR_OK(dmtr_record_latency(serialize_counter, serialize_count));
+                    DMTR_OK(dmtr_record_latency(cereal_latency, total_time.count()));
+                    DMTR_OK(dmtr_record_latency(cereal_counter, total_count));
 #endif
                 }
                 if (run_protobuf_test && !is_malloc_baseline) {
                     DMTR_OK(dmtr_push(&push_tokens[idx], wait_out.qr_qd, &pushed_buffers[idx]));
-                    std::cout << "Ran serialize" << std::endl;
                 } else {
                     DMTR_OK(dmtr_push(&push_tokens[idx], wait_out.qr_qd, &wait_out.qr_value.sga));
                 }

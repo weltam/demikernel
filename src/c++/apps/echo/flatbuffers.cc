@@ -8,21 +8,10 @@
 #include <dmtr/libos/mem.h>
 #include <sys/types.h>
 #include <iostream>
-/*
- * Note that the extra encoding is not necessary
- * This makes it comparable with the other two methods
- * Header Format (flatbuffers):
- * 1st segment:
- * | total length | size of type | type     | size of msg |
- * | size_t       | size_t       | variable | size_t      |
- * 2nd segment:
- * | msg      |
- * | variable |
- *
- * */
 
 flatbuffers_echo::flatbuffers_echo(uint32_t field_size, string message_type) :
     echo_message(echo_message::library::FLATBUFFERS, field_size, message_type),
+    string_field(generate_string(field_size)),
     getBuilder(field_size),
     putBuilder(field_size),
     msg1LBuilder(field_size),
@@ -30,6 +19,7 @@ flatbuffers_echo::flatbuffers_echo(uint32_t field_size, string message_type) :
     msg3LBuilder(field_size),
     msg4LBuilder(field_size),
     msg5LBuilder(field_size),
+    string_offset(getBuilder.CreateString(string_field)),
     getMsg(getBuilder),
     putMsg(putBuilder),
     msg1L(msg1LBuilder),
@@ -188,11 +178,10 @@ void flatbuffers_echo::handle_msg(uint8_t* buf) {
 }
 
 void flatbuffers_echo::build_get() {
-    auto string_field = generate_string(my_field_size);
-    auto key = getBuilder.CreateString(string_field);
-    getMsg.add_key(key);
+    getMsg.add_key(string_offset);
     auto final_get = getMsg.Finish();
     getBuilder.Finish(final_get);
+    std::cout << "Finished get" << std::endl;
 }
 
 void flatbuffers_echo::build_put() {

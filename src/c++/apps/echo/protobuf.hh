@@ -40,6 +40,7 @@ class protobuf_echo : public echo_message
 
     public: void encode_msg(dmtr_sgarray_t &sga, const Message& msg);
     public: void handle_message(const string& msg);
+    public: void print_counters() {}
 };
 
 

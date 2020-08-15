@@ -26,6 +26,7 @@ boost::optional<std::string> file;
 std::string cereal_system = std::string("none");
 std::string message = std::string("none");
 bool run_protobuf_test = false;
+uint32_t sga_size = 1;
 
 using namespace boost::program_options;
 
@@ -44,6 +45,7 @@ void parse_args(int argc, char **argv, bool server)
         ("file", value<std::string>(), "log file")
         ("system", value<std::string>(&cereal_system)->default_value("none"), "serialization method to test")
         ("message", value<std::string>(), "message type to test")
+        ("sgasize", value<uint32_t>(&sga_size)->default_value(1), "Number of buffers in sga")
         ("retry", "run client with retries");
 
 
@@ -129,6 +131,13 @@ void parse_args(int argc, char **argv, bool server)
         retries = true;
     }
 
+    if (vm.count("sgasize")) {
+        if (run_protobuf_test && sga_size > 1) {
+            std::cout << "Cannot have sga larger than 1 when running serialization benchmark." << std::endl;
+            exit(1);
+        }
+    }
+
     std::cout << "system: " << cereal_system << ", message: " << message << std::endl;
 };
 
@@ -142,7 +151,30 @@ void* generate_packet()
     return p;
 };
 
+void* fill_packet(uint32_t size) {
+    void * p = NULL;
+    dmtr_malloc(&p, size);
+    char *s = reinterpret_cast<char *>(p);
+    memset(s, FILL_CHAR, size);
+    s[size - 1] = '\0';
+    return p;
+}
+
 void read_packet(dmtr_sgarray_t &sga, uint32_t field_size) {
     std::string data((char*)sga.sga_segs[0].sgaseg_buf, sga.sga_segs[0].sgaseg_len);
 }
+
+void fill_in_sga(dmtr_sgarray_t &sga, uint32_t num_segments) {
+    sga.sga_numsegs = num_segments;
+    uint32_t segment_size = packet_size / num_segments;
+    for (uint32_t i = 0; i < num_segments; i++) {
+        uint32_t size = segment_size;
+        if (i == num_segments - 1) {
+            size = packet_size - (segment_size * (num_segments - 1));
+        } 
+        sga.sga_segs[i].sgaseg_len = size;
+        sga.sga_segs[i].sgaseg_buf = fill_packet(size);
+    }
+}
+
 #endif
