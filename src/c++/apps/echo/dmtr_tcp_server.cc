@@ -33,8 +33,15 @@
 #include <stdio.h>
 #include <string.h>
 
+#define DMTR_NO_SER
+
+#ifdef DMTR_NO_SER
+#include <rte_common.h>
+#include <rte_mbuf.h>
+#endif
 
 #define DMTR_PROFILE
+#define NUM_CONNECTIONS 20
 // #define OPEN2
 // general file descriptors
 int lqd = 0;
@@ -44,6 +51,7 @@ uint64_t recved = 0;
 echo_message *echo = NULL;
 bool free_push = false; // need to free push buffers
 bool is_malloc_baseline = false; // malloc baseline also has different freeing behavior
+dmtr_sgarray_t out_sga = {};
 
 #ifdef DMTR_PROFILE
 dmtr_latency_t *pop_latency = NULL;
@@ -86,6 +94,13 @@ int main(int argc, char *argv[])
 {
     // grab commandline args
     parse_args(argc, argv, true);
+
+    // get the number of segments for forward and receive buffers
+    int num_send_segments = sga_size;
+    int num_recv_segments = sga_size;
+#ifdef DMTR_NO_SER
+    num_recv_segments = 1;
+#endif
 
     // setup protobuf, capn proto and flatbuffers data structures
     protobuf_echo proto_data(packet_size, message);
@@ -132,11 +147,21 @@ int main(int argc, char *argv[])
 
 
     std::vector<dmtr_qtoken_t> tokens;
-    dmtr_qtoken_t push_tokens[256];
-    dmtr_sgarray_t popped_buffers[256];
-    dmtr_sgarray_t pushed_buffers[256];
-    memset(push_tokens, 0, 256 * sizeof(dmtr_qtoken_t));
+    dmtr_qtoken_t push_tokens[NUM_CONNECTIONS];
+    dmtr_sgarray_t popped_buffers[NUM_CONNECTIONS];
+    dmtr_sgarray_t pushed_buffers[NUM_CONNECTIONS];
+    memset(push_tokens, 0, NUM_CONNECTIONS * sizeof(dmtr_qtoken_t));
     dmtr_qtoken_t qtemp;
+    int num_recved[NUM_CONNECTIONS];
+
+
+    // allocate enough space for the headers
+    for (int i = 0; i < NUM_CONNECTIONS; i++) {
+        // no need to allocate on receive side, those will be automatically
+        // filled in
+        allocate_segments(&pushed_buffers[i], num_send_segments);
+        num_recved[i] = 0;
+    }
 
     // open listening socket
     DMTR_OK(dmtr_socket(&lqd, AF_INET, SOCK_STREAM, 0));
@@ -157,17 +182,22 @@ int main(int argc, char *argv[])
 
     // initialize serialized data structure that will be sent back
     if (!run_protobuf_test) {
+        fill_in_sga(out_sga, num_send_segments);
         // todo: maybe do something here
     } else if (!std::strcmp(cereal_system.c_str(), "malloc_baseline")) {
+        fill_in_sga(out_sga, num_send_segments);
         is_malloc_baseline = true;
         echo = &malloc_baseline_echo;
     } else if (!std::strcmp(cereal_system.c_str(), "malloc_no_str")) {
+        fill_in_sga(out_sga, num_send_segments);
         is_malloc_baseline = true;
         echo = &malloc_baseline_no_str;
     } else if (!std::strcmp(cereal_system.c_str(), "memcpy")) {
+        fill_in_sga(out_sga, num_send_segments);
         is_malloc_baseline = true;
         echo = &malloc_baseline_no_malloc;
     } else if (!std::strcmp(cereal_system.c_str(), "single_memcpy")) {
+        fill_in_sga(out_sga, num_send_segments);
         is_malloc_baseline = true;
         echo = &malloc_baseline_single_memcpy;
     } else if (!std::strcmp(cereal_system.c_str(), "protobuf")) {
@@ -185,7 +215,6 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    
 #ifdef DMTR_OPEN2
     // open file if we are a logging server
     if (boost::none != file) {
@@ -195,6 +224,7 @@ int main(int argc, char *argv[])
 #endif
 
     dmtr_qresult_t wait_out;
+
     int idx = 0;
     while (1) {
         int status = dmtr_wait_any(&wait_out, &idx, tokens.data(), tokens.size());
@@ -221,6 +251,7 @@ int main(int argc, char *argv[])
                 //DMTR_TRUE(EINVAL, DMTR_OPC_POP == wait_out.qr_opcode);
                 //DMTR_TRUE(EINVAL, wait_out.qr_value.sga.sga_numsegs == 1);
                 recved++;
+                num_recved[idx] += 1;
 #ifdef DMTR_PROFILE
                 auto start_counter = rdtsc();
                 auto start = boost::chrono::steady_clock::now();
@@ -267,8 +298,20 @@ int main(int argc, char *argv[])
                     DMTR_OK(dmtr_drop(push_tokens[idx]));
                 }
                 // free last recv buffer
-                DMTR_OK(dmtr_sgafree(&popped_buffers[idx]));
+                // check that the memory here is not null before calling free
+                if (num_recved[idx] > 1) {
+                    DMTR_OK(dmtr_sgafree(&popped_buffers[idx]));
+                    // also free segments from last buffer
+                    DMTR_OK(dmtr_sgafree_segments(&popped_buffers[idx]));
+#ifdef DMTR_NO_SER
+                if (popped_buffers[idx].dpdk_pkt != NULL) {
+                    //printf("Trying ti free dpdk pkt at %p\n", popped_buffers[idx].dpdk_pkt);
+                    rte_pktmbuf_free((struct rte_mbuf*) popped_buffers[idx].dpdk_pkt);
+                 }
+#endif
+                }
                 popped_buffers[idx] = wait_out.qr_value.sga;
+                //printf("Addr of sga segments array: %p, segment 0: %p, dpdk pkt: %p\n", (void *)(&popped_buffers[idx]), (void *)(popped_buffers[idx].sga_segs[0].sgaseg_buf), popped_buffers[idx].dpdk_pkt);
                 // only protobuf allocates extra pointers to free
                 if (free_push) {
                     DMTR_OK(dmtr_sgafree(&pushed_buffers[idx]));
@@ -299,7 +342,8 @@ int main(int argc, char *argv[])
                 if (run_protobuf_test && !is_malloc_baseline) {
                     DMTR_OK(dmtr_push(&push_tokens[idx], wait_out.qr_qd, &pushed_buffers[idx]));
                 } else {
-                    DMTR_OK(dmtr_push(&push_tokens[idx], wait_out.qr_qd, &wait_out.qr_value.sga));
+                    // baseline baseline, echo what the client sent
+                    DMTR_OK(dmtr_push(&push_tokens[idx], wait_out.qr_qd, &out_sga));
                 }
 
                 sent++;
@@ -316,10 +360,12 @@ int main(int argc, char *argv[])
                 //DMTR_OK(dmtr_wait(NULL, push_tokens[idx]));
             }
         } else {
+
             assert(status == ECONNRESET || status == ECONNABORTED);
             fprintf(stderr, "closing connection");
             dmtr_close(wait_out.qr_qd);
             tokens.erase(tokens.begin()+idx);
+            num_recved[idx] = 0;
         }
     }
 }

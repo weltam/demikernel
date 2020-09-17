@@ -15,6 +15,9 @@
 #include <cstring>
 #include <stdio.h>
 
+#define DEFAULT_SGASIZE_SER_TEST 4
+#define DMTR_ALLOCATE_SEGMENTS
+
 uint16_t port = 12345;
 boost::optional<std::string> server_ip_addr;
 uint32_t packet_size = 64;
@@ -132,9 +135,11 @@ void parse_args(int argc, char **argv, bool server)
     }
 
     if (vm.count("sgasize")) {
-        if (run_protobuf_test && sga_size > 1) {
-            std::cout << "Cannot have sga larger than 1 when running serialization benchmark." << std::endl;
-            exit(1);
+        sga_size = vm["sgasize"].as<uint32_t>();
+        if (run_protobuf_test && sga_size == 1) {
+            // for the non baseline tests, baseline number of segments used for
+            // now
+            sga_size = DEFAULT_SGASIZE_SER_TEST;
         }
     }
 
@@ -164,7 +169,17 @@ void read_packet(dmtr_sgarray_t &sga, uint32_t field_size) {
     std::string data((char*)sga.sga_segs[0].sgaseg_buf, sga.sga_segs[0].sgaseg_len);
 }
 
+void allocate_segments(dmtr_sgarray_t* sga, uint32_t num_segments) {
+#ifdef DMTR_ALLOCATE_SEGMENTS
+    // allocate the segments
+    void* segments = malloc(sizeof(dmtr_sgaseg) * num_segments);
+    assert(segments != NULL);
+    sga->sga_segs = (dmtr_sgaseg*)segments;
+#endif
+}
+
 void fill_in_sga(dmtr_sgarray_t &sga, uint32_t num_segments) {
+    allocate_segments(&sga, num_segments);
     sga.sga_numsegs = num_segments;
     uint32_t segment_size = packet_size / num_segments;
     for (uint32_t i = 0; i < num_segments; i++) {
@@ -176,5 +191,4 @@ void fill_in_sga(dmtr_sgarray_t &sga, uint32_t num_segments) {
         sga.sga_segs[i].sgaseg_buf = fill_packet(size);
     }
 }
-
 #endif

@@ -33,7 +33,12 @@
 #include <stdio.h>
 #include <string.h>
 
-//#define DMTR_PROFILE
+#define DMTR_PROFILE
+#define DMTR_NO_SER
+#ifdef DMTR_NO_SER
+#include <rte_common.h>
+#include <rte_mbuf.h>
+#endif
 
 namespace po = boost::program_options;
 uint64_t sent = 0, recved = 0;
@@ -62,6 +67,12 @@ void sig_handler(int signo)
 
 int main(int argc, char *argv[]) {
     parse_args(argc, argv, false);
+    // SGAs will be allocated with this many segments
+    int num_send_segments = sga_size;
+    int num_recv_segments = sga_size;
+#ifdef DMTR_NO_SER
+    num_recv_segments = 1;
+#endif
     DMTR_OK(dmtr_init(argc, argv));
 
     DMTR_OK(dmtr_new_latency(&latency, "end-to-end"));
@@ -100,40 +111,44 @@ int main(int argc, char *argv[]) {
    
     // if not running serialization test, send normal "aaaaa";
     if (!run_protobuf_test) {
-        fill_in_sga(sga, sga_size);
+        fill_in_sga(sga, num_send_segments);
         free_buf = true;
     } else if (!std::strcmp(cereal_system.c_str(), "malloc_baseline")) {
-        fill_in_sga(sga, sga_size);
+        fill_in_sga(sga, num_send_segments);
         echo = &malloc_baseline_echo;
         echo->serialize_message(sga);
         free_buf = true;
     } else if (!std::strcmp(cereal_system.c_str(), "malloc_no_str")) {
-        fill_in_sga(sga, sga_size);
+        fill_in_sga(sga, num_send_segments);
         echo = &malloc_baseline_no_str;
         echo->serialize_message(sga);
         free_buf = true;
     } else if (!std::strcmp(cereal_system.c_str(), "memcpy")) {
-        fill_in_sga(sga, sga_size);
+        fill_in_sga(sga, num_send_segments);
         echo = &malloc_baseline_no_malloc;
         echo->serialize_message(sga);
         free_buf = true;
     } else if (!std::strcmp(cereal_system.c_str(), "single_memcpy")) {
-        fill_in_sga(sga, sga_size);
+        fill_in_sga(sga, num_send_segments);
         echo = &malloc_baseline_single_memcpy;
         echo->serialize_message(sga);
         free_buf = true;
     } else if (!std::strcmp(cereal_system.c_str(), "protobuf")) {
+        allocate_segments(&sga, num_send_segments);
         echo = &protobuf_data;
         echo->serialize_message(sga);
         free_buf = true;
     } else if (!std::strcmp(cereal_system.c_str(), "protobytes")) {
+        allocate_segments(&sga, num_send_segments);
         echo = &proto_bytes_data;
         echo->serialize_message(sga);
         free_buf = true;
     } else if (!std::strcmp(cereal_system.c_str(), "capnproto")) {
+        allocate_segments(&sga, num_send_segments);
         echo = &capnproto_data;
         echo->serialize_message(sga);
     } else if (!std::strcmp(cereal_system.c_str(), "flatbuffers")) {
+        allocate_segments(&sga, num_send_segments);
         echo = &flatbuffers_data;
         echo->serialize_message(sga);
     } else {
@@ -155,11 +170,13 @@ int main(int argc, char *argv[]) {
         int ret;
         int num_retries = 0;
         dmtr_qresult_t wait_out;
+        allocate_segments(&wait_out.qr_value.sga, num_recv_segments);
+
         dmtr_qtoken_t push_tokens[clients];
         dmtr_qtoken_t pop_tokens[clients*2];
         dmtr_qtoken_t timer_q_push[clients];
         // timeout is 100 us
-        int timeout = 300000;
+        int timeout = 500000;
 
         boost::chrono::time_point<boost::chrono::steady_clock> start_times[clients];
         boost::chrono::time_point<boost::chrono::steady_clock> timer_times[clients];
@@ -244,6 +261,15 @@ int main(int argc, char *argv[]) {
                     timer_q_push[c] = 0;
                 }
 
+                // free the recv buffer
+                DMTR_OK(dmtr_sgafree(&wait_out.qr_value.sga));
+#ifdef DMTR_NO_SER
+            if (wait_out.qr_value.sga.dpdk_pkt != NULL) {
+                rte_pktmbuf_free((struct rte_mbuf*) wait_out.qr_value.sga.dpdk_pkt);
+            }
+#endif
+
+
                 // send a new packet and reset timer
                 DMTR_OK(dmtr_push(&push_tokens[c], qd, &sga));
                 sent++;
@@ -258,7 +284,9 @@ int main(int argc, char *argv[]) {
         std::cout << "Final num retries: " << num_retries << std::endl;
         finish();
         exit(0);
-        
+
+        // free the wait out segment buffers
+        DMTR_OK(dmtr_sgafree_segments(&wait_out.qr_value.sga));
     } 
 
     std::cerr << "Number of clients: " << clients << std::endl;
@@ -284,6 +312,9 @@ int main(int argc, char *argv[]) {
     
     int ret;
     dmtr_qresult_t wait_out;
+    allocate_segments(&wait_out.qr_value.sga, num_recv_segments);
+    // receive SGA: should have 1 segment if we're in DMTR_NO_SER,
+    // otherwise, the receive sga will have the normal number of segments
     
     //iterations *= clients;
     do {
@@ -294,6 +325,11 @@ int main(int argc, char *argv[]) {
             recved++;
             DMTR_OK(dmtr_drop(push_tokens[c]));
             DMTR_OK(dmtr_sgafree(&wait_out.qr_value.sga));
+#ifdef DMTR_NO_SER
+            if (wait_out.qr_value.sga.dpdk_pkt != NULL) {
+                rte_pktmbuf_free((struct rte_mbuf*) wait_out.qr_value.sga.dpdk_pkt);
+            }
+#endif
             // count the iteration
             iterations--;
         }
@@ -336,6 +372,11 @@ int main(int argc, char *argv[]) {
         // finished a full echo
         // free the allocated sga
         DMTR_OK(dmtr_sgafree(&wait_out.qr_value.sga));
+#ifdef DMTR_NO_SER
+            if (wait_out.qr_value.sga.dpdk_pkt != NULL) {
+                rte_pktmbuf_free((struct rte_mbuf*) wait_out.qr_value.sga.dpdk_pkt);
+            }
+#endif
         // count the iteration
         iterations--;
         // drop the push token from this echo
@@ -364,4 +405,7 @@ int main(int argc, char *argv[]) {
 
     finish();
     exit(0);
+    
+    // free the wait out segment buffers
+    DMTR_OK(dmtr_sgafree_segments(&wait_out.qr_value.sga));
 }

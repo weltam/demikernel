@@ -32,7 +32,10 @@
 #include <rte_udp.h>
 #include <unistd.h>
 
+
 namespace bpo = boost::program_options;
+#define DMTR_NO_SER
+#define DMTR_ALLOCATE_SEGMENTS
 
 #define NUM_MBUFS               8191
 #define MBUF_CACHE_SIZE         250
@@ -73,7 +76,6 @@ namespace bpo = boost::program_options;
  */
 #define RTE_TEST_RX_DESC_DEFAULT    128
 #define RTE_TEST_TX_DESC_DEFAULT    128
-
 #if DMTR_PROFILE
 typedef std::unique_ptr<dmtr_latency_t, std::function<void(dmtr_latency_t *)>> latency_ptr_type;
 static latency_ptr_type read_latency;
@@ -736,6 +738,17 @@ int dmtr::lwip_queue::push_thread(task::thread_type::yield_type &yield, task::th
 
         uint32_t total_len = 0; // Length of data written so far.
 
+#ifdef DMTR_NO_SER
+    //printf("Copying in data for %d segments\n", sga->sga_numsegs);
+    for (size_t i = 0; i < sga->sga_numsegs; i++) {
+        const auto len = sga->sga_segs[i].sgaseg_len;
+        rte_memcpy(p, sga->sga_segs[i].sgaseg_buf, len);
+        total_len += len;
+        p += len;
+    }
+
+#else
+
         // Fill in Demeter data at p.
         {
             auto * const u32 = reinterpret_cast<uint32_t *>(p);
@@ -756,6 +769,7 @@ int dmtr::lwip_queue::push_thread(task::thread_type::yield_type &yield, task::th
             total_len += len;
             p += len;
         }
+#endif
 
         // Fill in UDP header.
         {
@@ -955,14 +969,25 @@ dmtr::lwip_queue::service_incoming_packets() {
     auto dt = boost::chrono::steady_clock::now() - t0;
     DMTR_OK(dmtr_record_latency(read_latency.get(), dt.count()));
 #endif
-
     for (size_t i = 0; i < count; ++i) {
         struct sockaddr_in src, dst;
         dmtr_sgarray_t sga;
         // check the packet header
+#ifdef DMTR_NO_SER
+        bool valid_packet = parse_packet(src, dst, sga, pkts[i]);
+        // this will be freed later
+        if (valid_packet) {
+            //printf("Setting ptr to dpdk pkt in sga as %p\n", (void *)(pkts[i]));
+            sga.dpdk_pkt = (void *)(pkts[i]);
+        } else {
+            rte_pktmbuf_free(pkts[i]);
+        }
 
+#else
         bool valid_packet = parse_packet(src, dst, sga, pkts[i]);
         rte_pktmbuf_free(pkts[i]);
+        sga.dpdk_pkt = NULL;
+#endif
         if (valid_packet) {
             lwip_addr src_lwip(src);
             // found valid packet, try to place in queue based on src
@@ -1005,10 +1030,12 @@ dmtr::lwip_queue::parse_packet(struct sockaddr_in &src,
     // sga.buf[1].buf
     // ...
     auto *p = rte_pktmbuf_mtod(pkt, uint8_t *);
+    size_t header = 0;
 
     // check ethernet header
     auto * const eth_hdr = reinterpret_cast<struct ::rte_ether_hdr *>(p);
     p += sizeof(*eth_hdr);
+    header += sizeof(*eth_hdr);
     auto eth_type = ntohs(eth_hdr->ether_type);
 
 #if DMTR_DEBUG
@@ -1043,6 +1070,7 @@ dmtr::lwip_queue::parse_packet(struct sockaddr_in &src,
     // check ip header
     auto * const ip_hdr = reinterpret_cast<struct ::rte_ipv4_hdr *>(p);
     p += sizeof(*ip_hdr);
+    header += sizeof(*ip_hdr);
 
     // In network byte order.
     in_addr_t ipv4_src_addr = ip_hdr->src_addr;
@@ -1065,6 +1093,7 @@ dmtr::lwip_queue::parse_packet(struct sockaddr_in &src,
     // check udp header
     auto * const udp_hdr = reinterpret_cast<struct ::rte_udp_hdr *>(p);
     p += sizeof(*udp_hdr);
+    header += sizeof(*udp_hdr);
 
     // In network byte order.
     in_port_t udp_src_port = udp_hdr->src_port;
@@ -1089,13 +1118,29 @@ dmtr::lwip_queue::parse_packet(struct sockaddr_in &src,
             return false;
         }
     }
+#ifdef DMTR_NO_SER
+    sga.sga_numsegs = 1;
+    // allocate this many headers
+#else
     // segment count
     sga.sga_numsegs = ntohl(*reinterpret_cast<uint32_t *>(p));
     p += sizeof(uint32_t);
-
+#endif
 #if DMTR_DEBUG
     printf("recv: sga_numsegs: %d\n", sga.sga_numsegs);
 #endif
+#ifdef DMTR_ALLOCATE_SEGMENTS
+    void* segments = malloc(sizeof(dmtr_sgaseg_t *) * sga.sga_numsegs);
+    assert(segments != NULL);
+    sga.sga_segs = (dmtr_sgaseg_t *)segments;
+    // TODO: I have no clue when this will be freed
+#endif
+
+#ifdef DMTR_NO_SER
+    // actual pointer to dpdk memory
+    sga.sga_segs[0].sgaseg_buf = p;
+    sga.sga_segs[0].sgaseg_len = pkt->pkt_len - header;
+#else
 
     for (size_t i = 0; i < sga.sga_numsegs; ++i) {
         // segment length
@@ -1112,6 +1157,7 @@ dmtr::lwip_queue::parse_packet(struct sockaddr_in &src,
         // for DPDK, pointers are scattered
         sga.sga_buf = NULL;
         sga.sga_segs[i].sgaseg_buf = buf;
+        //printf("Allocating sga to: %p, sgasegs is at %p\n", buf, (void *)sga.sga_segs);
         // todo: remove copy if possible.
         rte_memcpy(buf, p, seg_len);
         p += seg_len;
@@ -1120,6 +1166,7 @@ dmtr::lwip_queue::parse_packet(struct sockaddr_in &src,
         printf("recv: packet segment [%lu] contents: %s\n", i, reinterpret_cast<char *>(buf));
 #endif
     }
+#endif
     sga.sga_addr.sin_family = AF_INET;
     sga.sga_addr.sin_port = udp_src_port;
     sga.sga_addr.sin_addr.s_addr = ipv4_src_addr;
