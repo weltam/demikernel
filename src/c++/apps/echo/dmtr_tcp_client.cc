@@ -34,8 +34,8 @@
 #include <string.h>
 
 #define DMTR_PROFILE
-#define DMTR_NO_SER
-#ifdef DMTR_NO_SER
+//#define DMTR_NO_SER
+#if defined(DMTR_NO_SER) || defined(DPDK_ZERO_COPY)
 #include <rte_common.h>
 #include <rte_mbuf.h>
 #endif
@@ -51,8 +51,17 @@ bool free_buf = false;
 //#define WAIT_FOR_ALL
 void finish() {
     std::cerr << "Sent: " << sent << "  Recved: " << recved << std::endl;
+    // free the outgoing SGA
     if (free_buf) {
-        dmtr_sgafree(&sga);
+        if (zero_copy) {
+            struct rte_mbuf** segments = reinterpret_cast<struct rte_mbuf**>(sga.segments);
+            for (size_t i = 0; i < sga.sga_numsegs; i++) {
+                struct rte_mbuf* pkt = segments[i];
+                rte_pktmbuf_free(pkt);
+            }
+        } else {
+            dmtr_sgafree(&sga);
+        }
     }
     dmtr_close(qd);
     dmtr_dump_latency(stderr, latency);
@@ -66,11 +75,12 @@ void sig_handler(int signo)
 
 
 int main(int argc, char *argv[]) {
+    printf("running thingy\n");
     parse_args(argc, argv, false);
     // SGAs will be allocated with this many segments
     int num_send_segments = sga_size;
     int num_recv_segments = sga_size;
-#ifdef DMTR_NO_SER
+#if defined(DMTR_NO_SER) || defined(DPDK_ZERO_COPY)
     num_recv_segments = 1;
 #endif
     DMTR_OK(dmtr_init(argc, argv));
@@ -108,10 +118,27 @@ int main(int argc, char *argv[]) {
     malloc_baseline_no_str malloc_baseline_no_str(packet_size, message);
     malloc_baseline_no_malloc malloc_baseline_no_malloc(packet_size, message);
     malloc_baseline_single_memcpy malloc_baseline_single_memcpy(packet_size, message);
+
+#ifdef DPDK_ZERO_COPY
+    if (zero_copy) {
+        // allocate the memory for the SGA
+        void *p;
+        DMTR_OK(dmtr_malloc(&p, sizeof(struct rte_mbuf*) * num_send_segments));
+        sga.segments = p;
+        sga.sga_numsegs = num_send_segments;
+        // allocate the space
+        DMTR_OK(dmtr_allocate_segments(&sga));
+        fill_in_sga_noalloc(sga, num_send_segments);
+        size_t len = 0;
+        DMTR_OK(dmtr_sgalen(&len, &sga));
+    }
+#endif
    
     // if not running serialization test, send normal "aaaaa";
     if (!run_protobuf_test) {
-        fill_in_sga(sga, num_send_segments);
+        if (!zero_copy) {
+            fill_in_sga(sga, num_send_segments);
+        }
         free_buf = true;
     } else if (!std::strcmp(cereal_system.c_str(), "malloc_baseline")) {
         fill_in_sga(sga, num_send_segments);
@@ -263,7 +290,7 @@ int main(int argc, char *argv[]) {
 
                 // free the recv buffer
                 DMTR_OK(dmtr_sgafree(&wait_out.qr_value.sga));
-#ifdef DMTR_NO_SER
+#if defined(DMTR_NO_SER) || defined(DPDK_ZERO_COPY)
             if (wait_out.qr_value.sga.dpdk_pkt != NULL) {
                 rte_pktmbuf_free((struct rte_mbuf*) wait_out.qr_value.sga.dpdk_pkt);
             }

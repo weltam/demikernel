@@ -86,11 +86,13 @@ add_dependencies(dmtr-posix-echo  dmtr-posix-server dmtr-posix-client)
 add_executable(dmtr-lwip-server ${TCP_ECHO_SERVER_SOURCES})
 target_link_libraries(dmtr-lwip-server dmtr-libos-lwip yaml-cpp
     boost_program_options ${Protobuf_LIBRARIES} CapnProto::capnp)
+#target_add_dpdk(dmtr-lwip-server)
 
 # LWIP TCP client
 add_executable(dmtr-lwip-client  ${TCP_ECHO_CLIENT_SOURCES})
 target_link_libraries(dmtr-lwip-client dmtr-libos-lwip yaml-cpp
     boost_program_options ${Protobuf_LIBRARIES} CapnProto::capnp)
+#target_add_dpdk(dmtr-lwip-client)
 
 # LWIP TCP client & server
 add_custom_target(dmtr-lwip-echo)

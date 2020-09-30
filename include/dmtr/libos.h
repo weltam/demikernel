@@ -47,6 +47,8 @@ DMTR_EXPORT int dmtr_stop_timer(dmtr_qtoken_t *qtok_out, int qd);
 DMTR_EXPORT int dmtr_poll(dmtr_qresult_t *qr_out, dmtr_qtoken_t qt);
 DMTR_EXPORT int dmtr_drop(dmtr_qtoken_t qt);
 
+DMTR_EXPORT int dmtr_allocate_segments(dmtr_sgarray_t *sga);
+
 #ifdef __cplusplus
 }
 #endif

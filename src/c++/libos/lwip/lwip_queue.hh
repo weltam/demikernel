@@ -6,6 +6,7 @@
 
 #include <boost/optional.hpp>
 #include <dmtr/libos/io_queue.hh>
+#include <dmtr/latency.h>
 #include <memory>
 #include <netinet/in.h>
 #include <queue>
@@ -78,6 +79,8 @@ class lwip_queue : public io_queue {
     public: int poll(dmtr_qresult_t &qr_out, dmtr_qtoken_t qt);
 
     public: static int init_dpdk(int argc, char *argv[]);
+    public: static int allocate_pkt(dmtr_sgarray_t* sga);
+	private: static void* get_data_pointer(struct rte_mbuf* pkt, bool has_header);
     public: static int finish_dpdk_init(YAML::Node &config);
     protected: static int get_dpdk_port_id(uint16_t &id_out);
     protected: static int ip_sum(uint16_t &sum_out, const uint16_t *hdr, int hdr_len);

@@ -33,15 +33,16 @@
 #include <stdio.h>
 #include <string.h>
 
-#define DMTR_NO_SER
+//#define DMTR_NO_SER
+#define DPDK_ZERO_COPY
 
-#ifdef DMTR_NO_SER
+#if defined(DMTR_NO_SER) || defined(DPDK_ZERO_COPY)
 #include <rte_common.h>
 #include <rte_mbuf.h>
 #endif
 
-#define DMTR_PROFILE
-#define NUM_CONNECTIONS 20
+//#define DMTR_PROFILE
+#define NUM_CONNECTIONS 30
 // #define OPEN2
 // general file descriptors
 int lqd = 0;
@@ -97,7 +98,7 @@ int main(int argc, char *argv[])
 
     // get the number of segments for forward and receive buffers
     int num_send_segments = sga_size;
-    int num_recv_segments = sga_size;
+    //int num_recv_segments = sga_size;
 #ifdef DMTR_NO_SER
     num_recv_segments = 1;
 #endif
@@ -180,10 +181,24 @@ int main(int argc, char *argv[])
     if (signal(SIGINT, sig_handler) == SIG_ERR)
         std::cout << "\ncan't catch SIGINT\n";
 
+#ifdef DPDK_ZERO_COPY
+    if (zero_copy) {
+        void *p;
+        DMTR_OK(dmtr_malloc(&p, sizeof(struct rte_mbuf*) * num_send_segments));
+        out_sga.segments = p;
+        out_sga.sga_numsegs = num_send_segments;
+        // allocate the space
+        DMTR_OK(dmtr_allocate_segments(&out_sga));
+        fill_in_sga_noalloc(out_sga, num_send_segments);
+    }
+    
+#endif
+
     // initialize serialized data structure that will be sent back
     if (!run_protobuf_test) {
-        fill_in_sga(out_sga, num_send_segments);
-        // todo: maybe do something here
+        if (!zero_copy) {
+            fill_in_sga(out_sga, num_send_segments);
+        }
     } else if (!std::strcmp(cereal_system.c_str(), "malloc_baseline")) {
         fill_in_sga(out_sga, num_send_segments);
         is_malloc_baseline = true;
@@ -303,7 +318,7 @@ int main(int argc, char *argv[])
                     DMTR_OK(dmtr_sgafree(&popped_buffers[idx]));
                     // also free segments from last buffer
                     DMTR_OK(dmtr_sgafree_segments(&popped_buffers[idx]));
-#ifdef DMTR_NO_SER
+#if defined(DMTR_NO_SER) || defined(DPDK_ZERO_COPY)
                 if (popped_buffers[idx].dpdk_pkt != NULL) {
                     //printf("Trying ti free dpdk pkt at %p\n", popped_buffers[idx].dpdk_pkt);
                     rte_pktmbuf_free((struct rte_mbuf*) popped_buffers[idx].dpdk_pkt);

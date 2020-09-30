@@ -16,7 +16,7 @@
 #include <stdio.h>
 
 #define DEFAULT_SGASIZE_SER_TEST 4
-#define DMTR_ALLOCATE_SEGMENTS
+//#define DMTR_ALLOCATE_SEGMENTS
 
 uint16_t port = 12345;
 boost::optional<std::string> server_ip_addr;
@@ -30,6 +30,7 @@ std::string cereal_system = std::string("none");
 std::string message = std::string("none");
 bool run_protobuf_test = false;
 uint32_t sga_size = 1;
+bool zero_copy = false;
 
 using namespace boost::program_options;
 
@@ -49,6 +50,7 @@ void parse_args(int argc, char **argv, bool server)
         ("system", value<std::string>(&cereal_system)->default_value("none"), "serialization method to test")
         ("message", value<std::string>(), "message type to test")
         ("sgasize", value<uint32_t>(&sga_size)->default_value(1), "Number of buffers in sga")
+        ("zero-copy", "run zero copy test")
         ("retry", "run client with retries");
 
 
@@ -143,6 +145,14 @@ void parse_args(int argc, char **argv, bool server)
         }
     }
 
+    if (vm.count("zero-copy")) {
+        zero_copy = true;
+        if (run_protobuf_test) {
+            std::cerr << "Zero-copy mode is currently only supported with baseline." << std::endl;
+            exit(1);
+        }
+    }
+
     std::cout << "system: " << cereal_system << ", message: " << message << std::endl;
 };
 
@@ -191,4 +201,23 @@ void fill_in_sga(dmtr_sgarray_t &sga, uint32_t num_segments) {
         sga.sga_segs[i].sgaseg_buf = fill_packet(size);
     }
 }
+
+void fill_in_sga_noalloc(dmtr_sgarray_t &sga, uint32_t num_segments) {
+	allocate_segments(&sga, num_segments);
+    sga.sga_numsegs = num_segments;
+    uint32_t segment_size = packet_size / num_segments;
+	for (uint32_t i = 0; i < num_segments; i++) {
+        uint32_t size = segment_size;
+        if (i == num_segments - 1) {
+            size = packet_size - (segment_size * (num_segments - 1));
+        } 
+		// assumes the memory here has already been allocated
+		char *s = reinterpret_cast<char *>(sga.sga_segs[i].sgaseg_buf);
+		memset(s, FILL_CHAR, size);
+		//s[size - 1] = "\0";
+		sga.sga_segs[i].sgaseg_len = size;
+		
+	}
+}
+
 #endif

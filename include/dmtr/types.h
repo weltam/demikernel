@@ -12,8 +12,9 @@
 extern "C" {
 #endif
 
-#define DMTR_ALLOCATE_SEGMENTS
-#define DMTR_SGARRAY_MAXSIZE 20
+#define DPDK_ZERO_COPY
+//#define DMTR_ALLOCATE_SEGMENTS
+#define DMTR_SGARRAY_MAXSIZE 5
 #define DMTR_HEADER_MAGIC 0x10102010
 #define QD_OFFSET 32ul
     //#define QD_MASK 0xFFFFFFFFul << QD_OFFSET
@@ -40,7 +41,10 @@ typedef struct dmtr_sgarray {
     // `dpdk-catnip`.
     struct sockaddr_in sga_addr;
     // For DPDK: record dpdk pkt location so we can free it later
-    void *dpdk_pkt;
+    void *dpdk_pkt; // dereferenced to struct rte_mbuf*
+#ifdef DPDK_ZERO_COPY
+    void *segments; // dereferenced to struct rte_mbuf* 
+#endif
 } dmtr_sgarray_t;
 
 typedef enum dmtr_opcode {

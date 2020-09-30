@@ -8,7 +8,7 @@
 #include <dmtr/types.h>
 #include <errno.h>
 #include <stdio.h>
-#define DMTR_ALLOCATE_SEGMENTS
+//#define DMTR_ALLOCATE_SEGMENTS
 int dmtr_sgalen(size_t *len_out, const dmtr_sgarray_t *sga) {
     DMTR_NOTNULL(EINVAL, len_out);
     *len_out = 0;
@@ -35,6 +35,10 @@ int dmtr_sgafree(dmtr_sgarray_t *sga) {
     if (NULL != sga->dpdk_pkt) {
         // the one sga here has dpdk data
         return 0;
+    }
+
+    if (NULL != sga->segments) {
+        // this one has a linked list of rte_mbuf** that needs to be freed
     }
 
 

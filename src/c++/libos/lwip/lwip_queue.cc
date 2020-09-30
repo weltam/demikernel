@@ -31,11 +31,29 @@
 #include <rte_memcpy.h>
 #include <rte_udp.h>
 #include <unistd.h>
+#include <stdint.h>
 
+#define DPDK_ZERO_COPY
+//#define DEBUG_INTERCALL_RATE
+
+#ifdef DEBUG_INTERCALL_RATE
+uint64_t rdtsc(){
+    unsigned int lo,hi;
+    __asm__ __volatile__ ("rdtsc" : "=a" (lo), "=d" (hi));
+    return ((uint64_t)hi << 32) | lo;
+}
+
+uint64_t num_rx_burst_calls = 0;
+boost::chrono::time_point<boost::chrono::steady_clock> last_call_burst = boost::chrono::steady_clock::now();
+uint64_t last_call_burst_cycles = 0;
+dmtr_latency_t* rx_burst_timer = NULL;
+dmtr_latency_t* rx_burst_cycles = NULL;
+
+#endif
 
 namespace bpo = boost::program_options;
-#define DMTR_NO_SER
-#define DMTR_ALLOCATE_SEGMENTS
+//#define DMTR_NO_SER
+//#define DMTR_ALLOCATE_SEGMENTS
 
 #define NUM_MBUFS               8191
 #define MBUF_CACHE_SIZE         250
@@ -257,6 +275,7 @@ int dmtr::lwip_queue::init_dpdk_port(uint16_t port_id, struct rte_mempool &mbuf_
     port_conf.rxmode.max_rx_pkt_len = RX_PACKET_LEN;
             
     port_conf.rxmode.offloads = DEV_RX_OFFLOAD_JUMBO_FRAME;
+    port_conf.txmode.offloads = DEV_TX_OFFLOAD_MULTI_SEGS;
 //    port_conf.rxmode.mq_mode = ETH_MQ_RX_RSS;
 //    port_conf.rx_adv_conf.rss_conf.rss_hf = ETH_RSS_IP | dev_info.flow_type_rss_offloads;
     port_conf.txmode.mq_mode = ETH_MQ_TX_NONE;
@@ -368,6 +387,35 @@ int dmtr::lwip_queue::init_dpdk(int argc, char *argv[])
     return finish_dpdk_init(config);
 }
 
+int dmtr::lwip_queue::allocate_pkt(dmtr_sgarray_t* sga) {
+    std::cout << "In allocate packet function" << std::endl;
+    struct rte_mbuf* prev = NULL;
+	struct rte_mbuf** pkts = reinterpret_cast<struct rte_mbuf**>(sga->segments);
+    for (size_t i = 0; i < sga->sga_numsegs; i++) {
+        struct rte_mbuf* pkt = pkts[i];
+        if (prev != NULL) {
+        }
+        DMTR_OK(rte_pktmbuf_alloc(pkt, our_mbuf_pool));
+        pkts[i] = pkt;
+        bool has_header = (i == 0) ? true: false;
+        sga->sga_segs[i].sgaseg_buf = get_data_pointer(pkt, has_header);
+    }
+    return 0;
+}
+
+void* dmtr::lwip_queue::get_data_pointer(struct rte_mbuf* pkt, bool has_header) {
+    auto *p = rte_pktmbuf_mtod(pkt, uint8_t *);
+    if (has_header) {
+        auto * const eth_hdr = reinterpret_cast<struct ::rte_ether_hdr *>(p);
+        p += sizeof(*eth_hdr);
+        auto * const ip_hdr = reinterpret_cast<struct ::rte_ipv4_hdr *>(p);
+        p += sizeof(*ip_hdr);
+        auto * const udp_hdr = reinterpret_cast<struct ::rte_udp_hdr *>(p);
+        p += sizeof(*udp_hdr);
+    }
+    return (void *)p;
+}
+
 int dmtr::lwip_queue::finish_dpdk_init(YAML::Node &config)
 {
     
@@ -443,6 +491,11 @@ int dmtr::lwip_queue::finish_dpdk_init(YAML::Node &config)
         default_src = new struct sockaddr_in();
         default_src->sin_addr.s_addr = in_addr.s_addr;
     }
+
+#ifdef DEBUG_INTERCALL_RATE
+    DMTR_OK(dmtr_new_latency(&rx_burst_timer, "RX intercall rate timer"));
+    DMTR_OK(dmtr_new_latency(&rx_burst_cycles, "RX intercall cycles"));
+#endif
     return 0;
 }
 
@@ -486,6 +539,11 @@ dmtr::lwip_queue::~lwip_queue()
                 q_in_packets, q_out_packets,
                 stats.ipackets, stats.opackets, stats.imissed, stats.ierrors, stats.oerrors);
     }
+#ifdef DEBUG_INTERCALL_RATE
+
+    dmtr_dump_latency(stderr, rx_burst_timer);
+    dmtr_dump_latency(stderr, rx_burst_cycles);
+#endif
 }
 
 int dmtr::lwip_queue::socket(int domain, int type, int protocol) {
@@ -715,8 +773,20 @@ int dmtr::lwip_queue::push_thread(task::thread_type::yield_type &yield, task::th
             //std::cout << "Sending to default address: " << saddr->sin_addr.s_addr << std::endl;
         }
         struct rte_mbuf *pkt = NULL;
+#ifdef DPDK_ZERO_COPY
+		struct rte_mbuf** pkts = reinterpret_cast<struct rte_mbuf**>(sga->segments);
+		for (size_t i = 0; i < sga->sga_numsegs; i++) {
+			pkt = pkts[i];
+			pkt->data_len = 0;
+			pkt->pkt_len = 0;
+		}
+
+		pkt = pkts[0];
+        auto *p = rte_pktmbuf_mtod(pkt, uint8_t *);
+#else
         DMTR_OK(rte_pktmbuf_alloc(pkt, our_mbuf_pool));
         auto *p = rte_pktmbuf_mtod(pkt, uint8_t *);
+#endif
         // packet layout order is (from outside -> in):
         // ether_hdr
         // ipv4_hdr
@@ -737,7 +807,12 @@ int dmtr::lwip_queue::push_thread(task::thread_type::yield_type &yield, task::th
         p += sizeof(*udp_hdr);
 
         uint32_t total_len = 0; // Length of data written so far.
-
+#ifdef DPDK_ZERO_COPY
+	for (size_t i = 0; i < sga->sga_numsegs; i++) {
+		const auto len = sga->sga_segs[i].sgaseg_len;
+		total_len += len;
+	}
+#else
 #ifdef DMTR_NO_SER
     //printf("Copying in data for %d segments\n", sga->sga_numsegs);
     for (size_t i = 0; i < sga->sga_numsegs; i++) {
@@ -770,7 +845,8 @@ int dmtr::lwip_queue::push_thread(task::thread_type::yield_type &yield, task::th
             p += len;
         }
 #endif
-
+#endif
+	size_t header_size = 0;
         // Fill in UDP header.
         {
             memset(udp_hdr, 0, sizeof(*udp_hdr));
@@ -792,6 +868,7 @@ int dmtr::lwip_queue::push_thread(task::thread_type::yield_type &yield, task::th
             udp_hdr->dgram_cksum = 0;
 
             total_len += sizeof(*udp_hdr);
+			header_size += sizeof(*udp_hdr);
         }
 
         // Fill in IP header.
@@ -824,6 +901,7 @@ int dmtr::lwip_queue::push_thread(task::thread_type::yield_type &yield, task::th
             ip_hdr->hdr_checksum = checksum;
 
             total_len += sizeof(*ip_hdr);
+			header_size += sizeof(*ip_hdr);
         }
 
         // Fill in  Ethernet header
@@ -835,11 +913,33 @@ int dmtr::lwip_queue::push_thread(task::thread_type::yield_type &yield, task::th
             eth_hdr->ether_type = htons(RTE_ETHER_TYPE_IPV4);
 
             total_len += sizeof(*eth_hdr);
+			header_size += sizeof(*eth_hdr);
         }
-
+#ifdef DPDK_ZERO_COPY
+		pkt->data_len = sga->sga_segs[0].sgaseg_len + header_size;
+		pkt->pkt_len = total_len;
+		pkt->nb_segs = sga->sga_numsegs;
+        pkt->next = NULL;
+        pkts = reinterpret_cast<struct rte_mbuf**>(sga->segments);
+        struct rte_mbuf* cur_pkt = pkt;
+        printf("%d data_len in %dth pkt; pkt_len: %d, nb_segs: %d\n", pkt->data_len, 0, pkt->pkt_len, pkt->nb_segs);
+		for (size_t i = 1; i < sga->sga_numsegs; i++) {
+            struct rte_mbuf* prev = cur_pkt;
+            cur_pkt = pkts[i];
+            prev->next = cur_pkt;
+            cur_pkt->data_len = sga->sga_segs[i].sgaseg_len;
+            cur_pkt += sga->sga_segs[i].sgaseg_len;
+            if (i == sga->sga_numsegs - 1) {
+                printf("Setting next for pkt %d to null\n", i);
+                cur_pkt->next = NULL;
+            }
+            //printf("%d data_len in %dth pkt\n", sga->sga_segs[i].sgaseg_len, i);
+		}
+#else
         pkt->data_len = total_len;
         pkt->pkt_len = total_len;
         pkt->nb_segs = 1;
+#endif
 
 #if DMTR_DEBUG
         printf("send: eth src addr: ");
@@ -895,6 +995,9 @@ int dmtr::lwip_queue::push_thread(task::thread_type::yield_type &yield, task::th
 
         DMTR_OK(t->complete(0, *sga));
     }
+#ifndef DPDK_ZERO_COPY
+    rte_pkmbuf_free(pkt);
+#endif
 
     return 0;
 }
@@ -973,7 +1076,7 @@ dmtr::lwip_queue::service_incoming_packets() {
         struct sockaddr_in src, dst;
         dmtr_sgarray_t sga;
         // check the packet header
-#ifdef DMTR_NO_SER
+#if defined(DMTR_NO_SER) || defined(DPDK_ZERO_COPY)
         bool valid_packet = parse_packet(src, dst, sga, pkts[i]);
         // this will be freed later
         if (valid_packet) {
@@ -1118,7 +1221,7 @@ dmtr::lwip_queue::parse_packet(struct sockaddr_in &src,
             return false;
         }
     }
-#ifdef DMTR_NO_SER
+#if defined(DMTR_NO_SER) || defined(DPDK_ZERO_COPY)
     sga.sga_numsegs = 1;
     // allocate this many headers
 #else
@@ -1136,10 +1239,11 @@ dmtr::lwip_queue::parse_packet(struct sockaddr_in &src,
     // TODO: I have no clue when this will be freed
 #endif
 
-#ifdef DMTR_NO_SER
+#if defined(DMTR_NO_SER) || defined(DPDK_ZERO_COPY)
     // actual pointer to dpdk memory
     sga.sga_segs[0].sgaseg_buf = p;
     sga.sga_segs[0].sgaseg_len = pkt->pkt_len - header;
+    //printf("Received pkt with: %d segments, %zu 1st segment size\n", pkt->nb_segs, sga.sga_segs[0].sgaseg_len);
 #else
 
     for (size_t i = 0; i < sga.sga_numsegs; ++i) {
@@ -1247,8 +1351,20 @@ int dmtr::lwip_queue::rte_eth_rx_burst(size_t &count_out, uint16_t port_id, uint
     DMTR_TRUE(EPERM, our_dpdk_init_flag);
     DMTR_TRUE(ERANGE, ::rte_eth_dev_is_valid_port(port_id));
     DMTR_NOTNULL(EINVAL, rx_pkts);
+#ifdef DEBUG_INTERCALL_RATE
+    if (num_rx_burst_calls != 0) {
+        auto dt = boost::chrono::steady_clock::now() - last_call_burst;
+        DMTR_OK(dmtr_record_latency(rx_burst_timer, dt.count()));
+        DMTR_OK(dmtr_record_latency(rx_burst_cycles, rdtsc() - last_call_burst_cycles));
+    }
+#endif
 
     size_t count = ::rte_eth_rx_burst(port_id, queue_id, rx_pkts, nb_pkts);
+#ifdef DEBUG_INTERCALL_RATE
+    last_call_burst = boost::chrono::steady_clock::now();
+    last_call_burst_cycles = rdtsc();
+    num_rx_burst_calls++;
+#endif
     if (0 == count) {
         // todo: after enough retries on `0 == count`, the link status
         // needs to be checked to determine if an error occurred.

@@ -182,3 +182,8 @@ int dmtr_stop_timer(dmtr_qtoken_t *qtok_out, int qd) {
 
     return ioq_api->stop_timer(*qtok_out, qd);
 }
+
+int dmtr_allocate_segments(dmtr_sgarray_t* sga) {
+    DMTR_OK(dmtr::lwip_queue::allocate_pkt(sga));
+    return 0;
+}
