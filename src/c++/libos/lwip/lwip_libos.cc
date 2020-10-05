@@ -184,6 +184,11 @@ int dmtr_stop_timer(dmtr_qtoken_t *qtok_out, int qd) {
 }
 
 int dmtr_allocate_segments(dmtr_sgarray_t* sga) {
-    DMTR_OK(dmtr::lwip_queue::allocate_pkt(sga));
+    DMTR_OK(dmtr::lwip_queue::allocate_pkt(sga));                      
+    return 0;
+}
+
+int dmtr_set_zero_copy() {
+    DMTR_OK(dmtr::lwip_queue::set_zero_copy());
     return 0;
 }

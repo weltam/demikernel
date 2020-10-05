@@ -33,6 +33,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#define DPDK_ZERO_COPY
 #define DMTR_PROFILE
 //#define DMTR_NO_SER
 #if defined(DMTR_NO_SER) || defined(DPDK_ZERO_COPY)
@@ -131,6 +132,7 @@ int main(int argc, char *argv[]) {
         fill_in_sga_noalloc(sga, num_send_segments);
         size_t len = 0;
         DMTR_OK(dmtr_sgalen(&len, &sga));
+        DMTR_OK(dmtr_set_zero_copy());
     }
 #endif
    

@@ -48,6 +48,7 @@ DMTR_EXPORT int dmtr_poll(dmtr_qresult_t *qr_out, dmtr_qtoken_t qt);
 DMTR_EXPORT int dmtr_drop(dmtr_qtoken_t qt);
 
 DMTR_EXPORT int dmtr_allocate_segments(dmtr_sgarray_t *sga);
+DMTR_EXPORT int dmtr_set_zero_copy();
 
 #ifdef __cplusplus
 }

@@ -190,6 +190,7 @@ int main(int argc, char *argv[])
         // allocate the space
         DMTR_OK(dmtr_allocate_segments(&out_sga));
         fill_in_sga_noalloc(out_sga, num_send_segments);
+        DMTR_OK(dmtr_set_zero_copy());
     }
     
 #endif
@@ -265,6 +266,7 @@ int main(int argc, char *argv[])
             } else {
                 //DMTR_TRUE(EINVAL, DMTR_OPC_POP == wait_out.qr_opcode);
                 //DMTR_TRUE(EINVAL, wait_out.qr_value.sga.sga_numsegs == 1);
+                //std::cout << "Starting to handle " << wait_out.qr_value.sga.sga_addr.sin_addr.s_addr << std::endl;
                 recved++;
                 num_recved[idx] += 1;
 #ifdef DMTR_PROFILE
@@ -366,6 +368,7 @@ int main(int argc, char *argv[])
                 auto push_dt = boost::chrono::steady_clock::now() - t0;
                 DMTR_OK(dmtr_record_latency(push_latency, push_dt.count()));
 #endif
+                //std::cout << "Finished handling: " << wait_out.qr_value.sga.sga_addr.sin_addr.s_addr << std::endl;
                 // async pop to get next message
                 DMTR_OK(dmtr_pop(&tokens[idx], wait_out.qr_qd));
 #ifdef DMTR_PROFILE

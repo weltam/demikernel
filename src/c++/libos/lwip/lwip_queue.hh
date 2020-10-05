@@ -53,6 +53,8 @@ class lwip_queue : public io_queue {
     protected: std::unique_ptr<task::thread_type> my_accept_thread;
     protected: std::unique_ptr<task::thread_type> my_push_thread;
     protected: std::unique_ptr<task::thread_type> my_pop_thread;
+    private: static bool my_zero_copy_mode;
+    private: static uint64_t num_valid_addresses;
 
     private: uint64_t q_in_packets = 0;
     private: uint64_t q_out_packets = 0;
@@ -101,6 +103,8 @@ class lwip_queue : public io_queue {
     protected: bool good() const {
         return is_bound() || is_connected();
     }
+
+    public: static int set_zero_copy();
 
     public: void start_threads();
     protected: int accept_thread(task::thread_type::yield_type &yield, task::thread_type::queue_type &tq);
