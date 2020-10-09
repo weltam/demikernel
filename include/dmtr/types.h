@@ -12,8 +12,8 @@
 extern "C" {
 #endif
 
-#define DMTR_ALLOCATE_SEGMENTS
-#define DMTR_SGARRAY_MAXSIZE 20
+//#define DMTR_ALLOCATE_SEGMENTS
+#define DMTR_SGARRAY_MAXSIZE 1
 #define DMTR_HEADER_MAGIC 0x10102010
 #define QD_OFFSET 32ul
     //#define QD_MASK 0xFFFFFFFFul << QD_OFFSET
@@ -39,8 +39,7 @@ typedef struct dmtr_sgarray {
     // todo: to be removed when LWIP libOS is retired in favor of
     // `dpdk-catnip`.
     struct sockaddr_in sga_addr;
-    // For DPDK: record dpdk pkt location so we can free it later
-    void *dpdk_pkt;
+    void *recv_segments; // rte_mbuf* corresponding to sent segments
 } dmtr_sgarray_t;
 
 typedef enum dmtr_opcode {

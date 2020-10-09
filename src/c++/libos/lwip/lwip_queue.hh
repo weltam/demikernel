@@ -16,6 +16,8 @@
 #include <map>
 #include <yaml-cpp/yaml.h>
 
+#define MAX_NUM_SEGMENTS 100
+
 class lwip_addr {
 public:
     lwip_addr();
@@ -31,12 +33,21 @@ private:
                           const lwip_addr &b);
 };
 
+// for sending 0 copy stuff
+struct lwip_sga {
+    uint32_t num_segments;
+    uint32_t segment_sizes[MAX_NUM_SEGMENTS];
+} typedef lwip_sga_t;
+
 namespace dmtr {
 
 class lwip_queue : public io_queue {
     protected: static const struct rte_ether_addr ether_broadcast;
     protected: static const size_t our_max_queue_depth;
     protected: static struct rte_mempool *our_mbuf_pool;
+    protected: static struct rte_mempool *header_mbuf_pool; // for the payload with header
+    protected: static struct rte_mempool *payload_mbuf_pool1; // for payload with main size segment
+    protected: static struct rte_mempool *payload_mbuf_pool2; // for end segment
     protected: static bool our_dpdk_init_flag;
     protected: static boost::optional<uint16_t> our_dpdk_port_id;
     // demultiplexing incoming packets into queues
@@ -58,6 +69,8 @@ class lwip_queue : public io_queue {
     private: static uint64_t in_packets;
     private: static uint64_t out_packets;
     private: static uint64_t invalid_packets;
+    private: static bool zero_copy_mode;
+    private: static lwip_sga_t *lwip_sga;
     public: lwip_queue(int qd);
     public: static int new_object(std::unique_ptr<io_queue> &q_out, int qd);
 
@@ -99,6 +112,13 @@ class lwip_queue : public io_queue {
         return is_bound() || is_connected();
     }
 
+    public: static int set_zero_copy();
+    public: static int init_mempools(uint32_t message_size, uint32_t num_segments);
+    private: static void * get_data_pointer(struct rte_mbuf* pkt, bool has_header);
+    private: size_t get_header_size();
+    private: static bool current_has_header; // for function init
+    private: static uint32_t current_segment_size;
+
     public: void start_threads();
     protected: int accept_thread(task::thread_type::yield_type &yield, task::thread_type::queue_type &tq);
     protected: int push_thread(task::thread_type::yield_type &yield, task::thread_type::queue_type &tq);
@@ -116,6 +136,8 @@ class lwip_queue : public io_queue {
     protected: static int rte_eth_rx_burst(size_t &count_out, uint16_t port_id, uint16_t queue_id, struct rte_mbuf **rx_pkts, const uint16_t nb_pkts);
     protected: static int rte_eth_tx_burst(size_t &count_out, uint16_t port_id,uint16_t queue_id, struct rte_mbuf **tx_pkts, uint16_t nb_pkts);
     protected: static int rte_pktmbuf_alloc(struct rte_mbuf *&pkt_out, struct rte_mempool * const mp);
+    protected: static void custom_init(struct rte_mempool *mp, void *opaque_arg, void *m, unsigned i);
+    protected: static int rte_pktmbuf_alloc_bulk(struct rte_mbuf** pkts, struct rte_mempool * const mp, size_t num_mbufs); 
     protected: static int rte_eal_init(int &count_out, int argc, char *argv[]);
     protected: static int rte_pktmbuf_pool_create(struct rte_mempool *&mpool_out, const char *name, unsigned n, unsigned cache_size, uint16_t priv_size, uint16_t data_room_size, int socket_id);
     protected: static int rte_eth_dev_info_get(uint16_t port_id, struct rte_eth_dev_info &dev_info);

@@ -33,12 +33,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#define DMTR_NO_SER
-
-#ifdef DMTR_NO_SER
 #include <rte_common.h>
 #include <rte_mbuf.h>
-#endif
 
 #define DMTR_PROFILE
 #define NUM_CONNECTIONS 20
@@ -97,10 +93,7 @@ int main(int argc, char *argv[])
 
     // get the number of segments for forward and receive buffers
     int num_send_segments = sga_size;
-    int num_recv_segments = sga_size;
-#ifdef DMTR_NO_SER
-    num_recv_segments = 1;
-#endif
+    // int num_recv_segments = sga_size;
 
     // setup protobuf, capn proto and flatbuffers data structures
     protobuf_echo proto_data(packet_size, message);
@@ -180,41 +173,49 @@ int main(int argc, char *argv[])
     if (signal(SIGINT, sig_handler) == SIG_ERR)
         std::cout << "\ncan't catch SIGINT\n";
 
-    // initialize serialized data structure that will be sent back
-    if (!run_protobuf_test) {
-        fill_in_sga(out_sga, num_send_segments);
-        // todo: maybe do something here
-    } else if (!std::strcmp(cereal_system.c_str(), "malloc_baseline")) {
-        fill_in_sga(out_sga, num_send_segments);
-        is_malloc_baseline = true;
-        echo = &malloc_baseline_echo;
-    } else if (!std::strcmp(cereal_system.c_str(), "malloc_no_str")) {
-        fill_in_sga(out_sga, num_send_segments);
-        is_malloc_baseline = true;
-        echo = &malloc_baseline_no_str;
-    } else if (!std::strcmp(cereal_system.c_str(), "memcpy")) {
-        fill_in_sga(out_sga, num_send_segments);
-        is_malloc_baseline = true;
-        echo = &malloc_baseline_no_malloc;
-    } else if (!std::strcmp(cereal_system.c_str(), "single_memcpy")) {
-        fill_in_sga(out_sga, num_send_segments);
-        is_malloc_baseline = true;
-        echo = &malloc_baseline_single_memcpy;
-    } else if (!std::strcmp(cereal_system.c_str(), "protobuf")) {
-        free_push = true;
-        echo = &proto_data;
-    } else if (!std::strcmp(cereal_system.c_str(), "protobytes")) {
-        free_push = true;
-        echo = &proto_bytes_data;
-    } else if (!std::strcmp(cereal_system.c_str(), "capnproto")) {
-        echo = &capnproto_data;
-    } else if (!std::strcmp(cereal_system.c_str(), "flatbuffers")) {
-        echo = &flatbuffers_data;
-    } else {
-        std::cerr << "Serialization cereal_system " << cereal_system  << " unknown." << std::endl;
-        exit(1);
-    }
 
+    if (zero_copy) { 
+        dmtr_set_zero_copy();
+        out_sga.sga_numsegs = num_send_segments; // so it doesn't error out
+        DMTR_OK(dmtr_init_mempools(packet_size, num_send_segments));
+        fill_in_sga_no_alloc(out_sga, num_send_segments);
+        
+    } else {
+        // initialize serialized data structure that will be sent back
+        if (!run_protobuf_test) {
+            fill_in_sga(out_sga, num_send_segments);
+            // todo: maybe do something here
+        } else if (!std::strcmp(cereal_system.c_str(), "malloc_baseline")) {
+            fill_in_sga(out_sga, num_send_segments);
+            is_malloc_baseline = true;
+            echo = &malloc_baseline_echo;
+        } else if (!std::strcmp(cereal_system.c_str(), "malloc_no_str")) {
+            fill_in_sga(out_sga, num_send_segments);
+            is_malloc_baseline = true;
+            echo = &malloc_baseline_no_str;
+        } else if (!std::strcmp(cereal_system.c_str(), "memcpy")) {
+            fill_in_sga(out_sga, num_send_segments);
+            is_malloc_baseline = true;
+            echo = &malloc_baseline_no_malloc;
+        } else if (!std::strcmp(cereal_system.c_str(), "single_memcpy")) {
+            fill_in_sga(out_sga, num_send_segments);
+            is_malloc_baseline = true;
+            echo = &malloc_baseline_single_memcpy;
+        } else if (!std::strcmp(cereal_system.c_str(), "protobuf")) {
+            free_push = true;
+            echo = &proto_data;
+        } else if (!std::strcmp(cereal_system.c_str(), "protobytes")) {
+            free_push = true;
+            echo = &proto_bytes_data;
+        } else if (!std::strcmp(cereal_system.c_str(), "capnproto")) {
+            echo = &capnproto_data;
+        } else if (!std::strcmp(cereal_system.c_str(), "flatbuffers")) {
+            echo = &flatbuffers_data;
+        } else {
+            std::cerr << "Serialization cereal_system " << cereal_system  << " unknown." << std::endl;
+             exit(1);
+        }
+    }
 #ifdef DMTR_OPEN2
     // open file if we are a logging server
     if (boost::none != file) {
@@ -303,12 +304,9 @@ int main(int argc, char *argv[])
                     DMTR_OK(dmtr_sgafree(&popped_buffers[idx]));
                     // also free segments from last buffer
                     DMTR_OK(dmtr_sgafree_segments(&popped_buffers[idx]));
-#ifdef DMTR_NO_SER
-                if (popped_buffers[idx].dpdk_pkt != NULL) {
-                    //printf("Trying ti free dpdk pkt at %p\n", popped_buffers[idx].dpdk_pkt);
-                    rte_pktmbuf_free((struct rte_mbuf*) popped_buffers[idx].dpdk_pkt);
+                if (popped_buffers[idx].recv_segments != NULL) {
+                    rte_pktmbuf_free((struct rte_mbuf*) popped_buffers[idx].recv_segments);
                  }
-#endif
                 }
                 popped_buffers[idx] = wait_out.qr_value.sga;
                 //printf("Addr of sga segments array: %p, segment 0: %p, dpdk pkt: %p\n", (void *)(&popped_buffers[idx]), (void *)(popped_buffers[idx].sga_segs[0].sgaseg_buf), popped_buffers[idx].dpdk_pkt);

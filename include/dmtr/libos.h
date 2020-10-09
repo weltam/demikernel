@@ -46,6 +46,8 @@ DMTR_EXPORT int dmtr_stop_timer(dmtr_qtoken_t *qtok_out, int qd);
 
 DMTR_EXPORT int dmtr_poll(dmtr_qresult_t *qr_out, dmtr_qtoken_t qt);
 DMTR_EXPORT int dmtr_drop(dmtr_qtoken_t qt);
+DMTR_EXPORT int dmtr_init_mempools(uint32_t message_size, uint32_t num_segments);
+DMTR_EXPORT int dmtr_set_zero_copy();
 
 #ifdef __cplusplus
 }

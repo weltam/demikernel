@@ -182,3 +182,13 @@ int dmtr_stop_timer(dmtr_qtoken_t *qtok_out, int qd) {
 
     return ioq_api->stop_timer(*qtok_out, qd);
 }
+
+int dmtr_set_zero_copy() {
+    DMTR_OK(dmtr::lwip_queue::set_zero_copy());
+    return 0;
+}
+
+int dmtr_init_mempools(uint32_t num_segments, uint32_t message_size) {
+    DMTR_OK(dmtr::lwip_queue::init_mempools(num_segments, message_size));
+    return 0;
+}

@@ -16,7 +16,7 @@
 #include <stdio.h>
 
 #define DEFAULT_SGASIZE_SER_TEST 4
-#define DMTR_ALLOCATE_SEGMENTS
+//#define DMTR_ALLOCATE_SEGMENTS
 
 uint16_t port = 12345;
 boost::optional<std::string> server_ip_addr;
@@ -30,6 +30,7 @@ std::string cereal_system = std::string("none");
 std::string message = std::string("none");
 bool run_protobuf_test = false;
 uint32_t sga_size = 1;
+bool zero_copy = false;
 
 using namespace boost::program_options;
 
@@ -49,7 +50,8 @@ void parse_args(int argc, char **argv, bool server)
         ("system", value<std::string>(&cereal_system)->default_value("none"), "serialization method to test")
         ("message", value<std::string>(), "message type to test")
         ("sgasize", value<uint32_t>(&sga_size)->default_value(1), "Number of buffers in sga")
-        ("retry", "run client with retries");
+        ("retry", "run client with retries")
+        ("zero-copy", "zero copy mode");
 
 
     variables_map vm;
@@ -134,6 +136,10 @@ void parse_args(int argc, char **argv, bool server)
         retries = true;
     }
 
+    if (vm.count("zero-copy")) {
+        zero_copy = true;
+    }
+
     if (vm.count("sgasize")) {
         sga_size = vm["sgasize"].as<uint32_t>();
         if (run_protobuf_test && sga_size == 1) {
@@ -189,6 +195,19 @@ void fill_in_sga(dmtr_sgarray_t &sga, uint32_t num_segments) {
         } 
         sga.sga_segs[i].sgaseg_len = size;
         sga.sga_segs[i].sgaseg_buf = fill_packet(size);
+    }
+}
+
+void fill_in_sga_no_alloc(dmtr_sgarray_t &sga, uint32_t num_segments) {
+    allocate_segments(&sga, num_segments);
+    sga.sga_numsegs = num_segments;
+    uint32_t segment_size = packet_size / num_segments;
+    for (uint32_t i = 0; i < num_segments; i++) {
+        uint32_t size = segment_size;
+        if (i == num_segments - 1) {
+            size = packet_size - (segment_size * (num_segments - 1));
+        }
+        sga.sga_segs[i].sgaseg_len = size;
     }
 }
 #endif

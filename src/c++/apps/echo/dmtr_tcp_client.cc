@@ -34,11 +34,8 @@
 #include <string.h>
 
 #define DMTR_PROFILE
-#define DMTR_NO_SER
-#ifdef DMTR_NO_SER
 #include <rte_common.h>
 #include <rte_mbuf.h>
-#endif
 
 namespace po = boost::program_options;
 uint64_t sent = 0, recved = 0;
@@ -69,10 +66,7 @@ int main(int argc, char *argv[]) {
     parse_args(argc, argv, false);
     // SGAs will be allocated with this many segments
     int num_send_segments = sga_size;
-    int num_recv_segments = sga_size;
-#ifdef DMTR_NO_SER
-    num_recv_segments = 1;
-#endif
+    int num_recv_segments = 1;
     DMTR_OK(dmtr_init(argc, argv));
 
     DMTR_OK(dmtr_new_latency(&latency, "end-to-end"));
@@ -108,54 +102,61 @@ int main(int argc, char *argv[]) {
     malloc_baseline_no_str malloc_baseline_no_str(packet_size, message);
     malloc_baseline_no_malloc malloc_baseline_no_malloc(packet_size, message);
     malloc_baseline_single_memcpy malloc_baseline_single_memcpy(packet_size, message);
-   
-    // if not running serialization test, send normal "aaaaa";
-    if (!run_protobuf_test) {
-        fill_in_sga(sga, num_send_segments);
-        free_buf = true;
-    } else if (!std::strcmp(cereal_system.c_str(), "malloc_baseline")) {
-        fill_in_sga(sga, num_send_segments);
-        echo = &malloc_baseline_echo;
-        echo->serialize_message(sga);
-        free_buf = true;
-    } else if (!std::strcmp(cereal_system.c_str(), "malloc_no_str")) {
-        fill_in_sga(sga, num_send_segments);
-        echo = &malloc_baseline_no_str;
-        echo->serialize_message(sga);
-        free_buf = true;
-    } else if (!std::strcmp(cereal_system.c_str(), "memcpy")) {
-        fill_in_sga(sga, num_send_segments);
-        echo = &malloc_baseline_no_malloc;
-        echo->serialize_message(sga);
-        free_buf = true;
-    } else if (!std::strcmp(cereal_system.c_str(), "single_memcpy")) {
-        fill_in_sga(sga, num_send_segments);
-        echo = &malloc_baseline_single_memcpy;
-        echo->serialize_message(sga);
-        free_buf = true;
-    } else if (!std::strcmp(cereal_system.c_str(), "protobuf")) {
-        allocate_segments(&sga, num_send_segments);
-        echo = &protobuf_data;
-        echo->serialize_message(sga);
-        free_buf = true;
-    } else if (!std::strcmp(cereal_system.c_str(), "protobytes")) {
-        allocate_segments(&sga, num_send_segments);
-        echo = &proto_bytes_data;
-        echo->serialize_message(sga);
-        free_buf = true;
-    } else if (!std::strcmp(cereal_system.c_str(), "capnproto")) {
-        allocate_segments(&sga, num_send_segments);
-        echo = &capnproto_data;
-        echo->serialize_message(sga);
-    } else if (!std::strcmp(cereal_system.c_str(), "flatbuffers")) {
-        allocate_segments(&sga, num_send_segments);
-        echo = &flatbuffers_data;
-        echo->serialize_message(sga);
-    } else {
-        std::cerr << "Serialization cereal_system " << cereal_system << " unknown." << std::endl;
-        exit(1);
-    }
 
+    if (zero_copy) {
+        dmtr_set_zero_copy();
+        sga.sga_numsegs = num_send_segments; // so it doesn't error out
+        DMTR_OK(dmtr_init_mempools(packet_size, num_send_segments));
+        printf("Done initializing mempools\n");
+        free_buf = true;
+    } else {
+        // if not running serialization test, send normal "aaaaa";
+        if (!run_protobuf_test) {
+            fill_in_sga(sga, num_send_segments);
+            free_buf = true;
+        } else if (!std::strcmp(cereal_system.c_str(), "malloc_baseline")) {
+            fill_in_sga(sga, num_send_segments);
+            echo = &malloc_baseline_echo;
+            echo->serialize_message(sga);
+            free_buf = true;
+        } else if (!std::strcmp(cereal_system.c_str(), "malloc_no_str")) {
+            fill_in_sga(sga, num_send_segments);
+            echo = &malloc_baseline_no_str;
+            echo->serialize_message(sga);
+            free_buf = true;
+        } else if (!std::strcmp(cereal_system.c_str(), "memcpy")) {
+            fill_in_sga(sga, num_send_segments);
+            echo = &malloc_baseline_no_malloc;
+            echo->serialize_message(sga);
+            free_buf = true;
+        } else if (!std::strcmp(cereal_system.c_str(), "single_memcpy")) {
+            fill_in_sga(sga, num_send_segments);
+            echo = &malloc_baseline_single_memcpy;
+            echo->serialize_message(sga);
+            free_buf = true;
+        } else if (!std::strcmp(cereal_system.c_str(), "protobuf")) {
+            allocate_segments(&sga, num_send_segments);
+            echo = &protobuf_data;
+            echo->serialize_message(sga);
+            free_buf = true;
+        } else if (!std::strcmp(cereal_system.c_str(), "protobytes")) {
+            allocate_segments(&sga, num_send_segments);
+            echo = &proto_bytes_data;
+            echo->serialize_message(sga);
+            free_buf = true;
+        } else if (!std::strcmp(cereal_system.c_str(), "capnproto")) {
+            allocate_segments(&sga, num_send_segments);
+            echo = &capnproto_data;
+            echo->serialize_message(sga);
+        } else if (!std::strcmp(cereal_system.c_str(), "flatbuffers")) {
+            allocate_segments(&sga, num_send_segments);
+            echo = &flatbuffers_data;
+            echo->serialize_message(sga);
+        } else {
+            std::cerr << "Serialization cereal_system " << cereal_system << " unknown." << std::endl;
+            exit(1);
+        }
+    }
     // run a simpler test with retries turned on
     if (retries) {
         // one more iteration: don't count first
@@ -263,11 +264,9 @@ int main(int argc, char *argv[]) {
 
                 // free the recv buffer
                 DMTR_OK(dmtr_sgafree(&wait_out.qr_value.sga));
-#ifdef DMTR_NO_SER
-            if (wait_out.qr_value.sga.dpdk_pkt != NULL) {
-                rte_pktmbuf_free((struct rte_mbuf*) wait_out.qr_value.sga.dpdk_pkt);
+            if (wait_out.qr_value.sga.recv_segments != NULL) {
+                rte_pktmbuf_free((struct rte_mbuf*) wait_out.qr_value.sga.recv_segments);
             }
-#endif
 
 
                 // send a new packet and reset timer
@@ -325,11 +324,9 @@ int main(int argc, char *argv[]) {
             recved++;
             DMTR_OK(dmtr_drop(push_tokens[c]));
             DMTR_OK(dmtr_sgafree(&wait_out.qr_value.sga));
-#ifdef DMTR_NO_SER
-            if (wait_out.qr_value.sga.dpdk_pkt != NULL) {
-                rte_pktmbuf_free((struct rte_mbuf*) wait_out.qr_value.sga.dpdk_pkt);
+            if (wait_out.qr_value.sga.recv_segments != NULL) {
+                rte_pktmbuf_free((struct rte_mbuf*) wait_out.qr_value.sga.recv_segments);
             }
-#endif
             // count the iteration
             iterations--;
         }
@@ -372,11 +369,9 @@ int main(int argc, char *argv[]) {
         // finished a full echo
         // free the allocated sga
         DMTR_OK(dmtr_sgafree(&wait_out.qr_value.sga));
-#ifdef DMTR_NO_SER
-            if (wait_out.qr_value.sga.dpdk_pkt != NULL) {
-                rte_pktmbuf_free((struct rte_mbuf*) wait_out.qr_value.sga.dpdk_pkt);
-            }
-#endif
+        if (wait_out.qr_value.sga.recv_segments != NULL) {
+            rte_pktmbuf_free((struct rte_mbuf*) wait_out.qr_value.sga.recv_segments);
+        }
         // count the iteration
         iterations--;
         // drop the push token from this echo

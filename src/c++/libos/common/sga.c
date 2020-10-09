@@ -32,11 +32,10 @@ int dmtr_sgafree(dmtr_sgarray_t *sga) {
         return 0;
     }
 
-    if (NULL != sga->dpdk_pkt) {
+    if (NULL != sga->recv_segments) {
         // the one sga here has dpdk data
         return 0;
     }
-
 
     if (NULL == sga->sga_buf) {
         //printf("num segs: %d\n", sga->sga_numsegs);
