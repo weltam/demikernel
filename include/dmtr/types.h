@@ -30,6 +30,7 @@ typedef struct dmtr_sgaseg {
 typedef struct dmtr_sgarray {
     void *sga_buf;
     uint32_t sga_numsegs;
+    int id; // so we can keep track of message IDs
     // TODO: dynamically or statically size this struct?
 #ifdef DMTR_ALLOCATE_SEGMENTS
     dmtr_sgaseg_t* sga_segs; // pointer to segments

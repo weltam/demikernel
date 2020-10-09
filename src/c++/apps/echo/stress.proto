@@ -5,6 +5,7 @@ package stress;
 // simplest message that can be made arbitrarily large
 message GetMessage {
     string key = 1;
+    int32 id = 2;
 }
 
 // simple message that can be made arbitrarily large

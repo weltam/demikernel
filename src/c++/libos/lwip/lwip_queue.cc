@@ -765,6 +765,12 @@ int dmtr::lwip_queue::push_thread(task::thread_type::yield_type &yield, task::th
         auto * const udp_hdr = reinterpret_cast<struct ::rte_udp_hdr *>(p);
         p += sizeof(*udp_hdr);
 
+        // write in the packet ID now in the header as well
+        auto * const id = reinterpret_cast<uint32_t *>(p);
+        *id = htonl(sga->id);
+        p += sizeof(*id);
+
+        // now add in the SGA id to be sent and deserialized on the other side.
         uint32_t total_len = 0; // Length of data written so far.
 
 #ifdef DMTR_NO_SER
@@ -1173,6 +1179,11 @@ dmtr::lwip_queue::parse_packet(struct sockaddr_in &src,
             return false;
         }
     }
+
+    // get the ID
+    sga.id = ntohl(*reinterpret_cast<uint32_t *>(p));
+    p += sizeof(uint32_t);
+
 #ifdef DMTR_NO_SER
     sga.sga_numsegs = 1;
     // allocate this many headers
@@ -1651,6 +1662,7 @@ void dmtr::lwip_queue::custom_init(struct rte_mempool *mp, void *opaque_arg, voi
         p += sizeof(*ip_hdr);
         auto * const udp_hdr = reinterpret_cast<struct ::rte_udp_hdr *>(p);
         p += sizeof(*udp_hdr);
+        p += sizeof(uint32_t);
     }
     char *s = reinterpret_cast<char *>(p);
     memset(s, FILL_CHAR, dmtr::lwip_queue::current_segment_size);
@@ -1667,6 +1679,7 @@ void * dmtr::lwip_queue::get_data_pointer(struct rte_mbuf * pkt, bool has_header
         p += sizeof(*ip_hdr);
         auto * const udp_hdr = reinterpret_cast<struct ::rte_udp_hdr *>(p);
         p += sizeof(*udp_hdr);
+        p += sizeof(uint32_t);
     }
     return (void *)p;
 }
@@ -1680,6 +1693,7 @@ size_t dmtr::lwip_queue::get_header_size() {
     header_size += sizeof(*ip_hdr);
     auto * const udp_hdr = reinterpret_cast<struct ::rte_udp_hdr *>(p);
     header_size += sizeof(*udp_hdr);
+    header_size += sizeof(uint32_t);
     return header_size;
 }
 

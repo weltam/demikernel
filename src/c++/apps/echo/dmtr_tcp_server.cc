@@ -267,6 +267,7 @@ int main(int argc, char *argv[])
                     DMTR_OK(dmtr_record_latency(deserialize_counter, deserialize_count));
 #endif
                 }
+                uint32_t echo_id = wait_out.qr_value.sga.id;
 
 #ifdef DMTR_PROFILE
                 qtemp = tokens[idx];
@@ -337,10 +338,14 @@ int main(int argc, char *argv[])
                     DMTR_OK(dmtr_record_latency(cereal_counter, total_count));
 #endif
                 }
+                // make sure to assign the outgoing SGA the right ID
+                printf("Received packet with id %d\n", echo_id);
                 if (run_protobuf_test && !is_malloc_baseline) {
+                    pushed_buffers[idx].id = echo_id;
                     DMTR_OK(dmtr_push(&push_tokens[idx], wait_out.qr_qd, &pushed_buffers[idx]));
                 } else {
                     // baseline baseline, echo what the client sent
+                    out_sga.id = echo_id;
                     DMTR_OK(dmtr_push(&push_tokens[idx], wait_out.qr_qd, &out_sga));
                 }
 

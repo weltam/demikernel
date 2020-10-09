@@ -157,8 +157,10 @@ int main(int argc, char *argv[]) {
             exit(1);
         }
     }
+    uint32_t last_sent = 0;
     // run a simpler test with retries turned on
     if (retries) {
+
         // one more iteration: don't count first
         iterations += 1;
         // set up timers for each client
@@ -181,6 +183,7 @@ int main(int argc, char *argv[]) {
 
         boost::chrono::time_point<boost::chrono::steady_clock> start_times[clients];
         boost::chrono::time_point<boost::chrono::steady_clock> timer_times[clients];
+        int current_packet[clients]; // which packet ID are these clients sending
         
         // set up our signal handlers
         if (signal(SIGINT, sig_handler) == SIG_ERR)
@@ -188,6 +191,11 @@ int main(int argc, char *argv[]) {
 
         // start all the clients
         for (uint32_t c = 0; c < clients; c++) {
+            // last sent packet
+            last_sent += 1;
+            current_packet[c] = last_sent;
+            sga.id = last_sent;
+
             // first push and pop
             DMTR_OK(dmtr_push(&push_tokens[c], qd, &sga));
             sent++;
@@ -219,12 +227,13 @@ int main(int argc, char *argv[]) {
                     // count time since timer fire
                     auto dt = boost::chrono::steady_clock::now() - timer_times[c];
                     auto sent_dt = boost::chrono::steady_clock::now() - start_times[c];
-                    std::cout << "Idx " << idx << " fired after " << dt.count() << " time, since sent: " << sent_dt.count() << " time, recvd so far: " << recved << std::endl;
+                    std::cout << "Idx " << idx << " fired after " << dt.count() << " time, since sent: " << sent_dt.count() << " time, recvd so far: " << recved << ", pkt id: " << current_packet[c] <<  std::endl;
                     // drop the push token from this echo
                     if (push_tokens[c] != 0) {
                         DMTR_OK(dmtr_drop(push_tokens[c]));
                         push_tokens[c] = 0;
                     }
+                    sga.id = current_packet[c]; // make sure pushed packet has correct ID
                 
                     DMTR_OK(dmtr_push(&push_tokens[c], qd, &sga));
                 }
@@ -243,6 +252,19 @@ int main(int argc, char *argv[]) {
             } else {
                 uint32_t c = idx/2;
                 auto dt = boost::chrono::steady_clock::now() - start_times[c];
+
+                // check that the  message ID is correct for this client
+                if (wait_out.qr_value.sga.id <= current_packet[c]) {
+                    // old packet coming to haunt us
+                    printf("Received pkt with old id\n");
+                    continue;
+                } else if (wait_out.qr_value.sga.id > current_packet[c]) {
+                    std::cerr << "Cannot have packet ID, " << wait_out.qr_value.sga.id << ", greater than current received: " << current_packet[c] << std::endl;
+                } else {
+                    last_sent += 1;
+                    current_packet[c] = last_sent;
+                    sga.id = current_packet[c];
+                }
                 // ping came back
                 if (recved != 0) {
                     DMTR_OK(dmtr_record_latency(latency, dt.count()));
@@ -264,9 +286,9 @@ int main(int argc, char *argv[]) {
 
                 // free the recv buffer
                 DMTR_OK(dmtr_sgafree(&wait_out.qr_value.sga));
-            if (wait_out.qr_value.sga.recv_segments != NULL) {
-                rte_pktmbuf_free((struct rte_mbuf*) wait_out.qr_value.sga.recv_segments);
-            }
+                if (wait_out.qr_value.sga.recv_segments != NULL) {
+                    rte_pktmbuf_free((struct rte_mbuf*) wait_out.qr_value.sga.recv_segments);
+                }
 
 
                 // send a new packet and reset timer
@@ -278,7 +300,7 @@ int main(int argc, char *argv[]) {
                 // set timeout
                 DMTR_OK(dmtr_push_tick(&timer_q_push[c], timer_qds[c], timeout));
                 timer_times[c] = boost::chrono::steady_clock::now();
-            }    
+            }   
         } while (iterations > 0 && ret == 0);
         std::cout << "Final num retries: " << num_retries << std::endl;
         finish();
@@ -292,6 +314,7 @@ int main(int argc, char *argv[]) {
 
     dmtr_qtoken_t push_tokens[clients];
     dmtr_qtoken_t pop_tokens[clients];
+    uint32_t current_packet[clients];
     boost::chrono::time_point<boost::chrono::steady_clock> start_times[clients];
 
     // set up our signal handlers
@@ -300,6 +323,9 @@ int main(int argc, char *argv[]) {
  
     // start all the clients
     for (uint32_t c = 0; c < clients; c++) {
+        last_sent++;
+        current_packet[c] = last_sent;
+        sga.id = last_sent;
         // push message to server
         DMTR_OK(dmtr_push(&push_tokens[c], qd, &sga));
         sent++;
@@ -345,6 +371,9 @@ int main(int argc, char *argv[]) {
 #endif
             // start again
             // push back to the server
+            last_sent += 1;
+            current_packet[c] = last_sent;
+            sga.id = last_sent;
             DMTR_OK(dmtr_push(&push_tokens[c], qd, &sga));
             sent++;
             // async pop
@@ -387,6 +416,9 @@ int main(int argc, char *argv[]) {
             continue;
         }
 #endif
+        last_sent++;
+        current_packet[idx] = last_sent;
+        sga.id = last_sent;
         // start again
         // push back to the server
         DMTR_OK(dmtr_push(&push_tokens[idx], qd, &sga));
