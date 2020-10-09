@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation
 // Licensed under the MIT license.
 
+#include "stress_generated.h"
 #include "flatbuffers.hh"
 #include "message.hh"
 #include <string>
@@ -11,70 +12,76 @@
 
 flatbuffers_echo::flatbuffers_echo(uint32_t field_size, string message_type) :
     echo_message(echo_message::library::FLATBUFFERS, field_size, message_type),
-    string_field(generate_string(field_size)),
-    getBuilder(field_size),
+    string_field(generate_string(field_size))
+    /*getBuilder(field_size),
     putBuilder(field_size),
     msg1LBuilder(field_size),
     msg2LBuilder(field_size),
     msg3LBuilder(field_size),
     msg4LBuilder(field_size),
-    msg5LBuilder(field_size),
-    string_offset(getBuilder.CreateString(string_field)),
-    getMsg(getBuilder),
+    msg5LBuilder(field_size),*/
+    /*getMsg(getBuilder),
     putMsg(putBuilder),
     msg1L(msg1LBuilder),
     msg2L(msg2LBuilder),
     msg3L(msg3LBuilder),
     msg4L(msg4LBuilder),
-    msg5L(msg5LBuilder)
+    msg5L(msg5LBuilder)*/
 {
     switch (my_msg_enum) {
         case echo_message::msg_type::GET:
-            build_get();
+            //build_get();
             break;
         case echo_message::msg_type::PUT:
-            build_put();
+            //build_put();
             break;
         case echo_message::msg_type::MSG1L:
-            build_msg1L();
+            //build_msg1L();
             break;
         case echo_message::msg_type::MSG2L:
-            build_msg2L();
+            //build_msg2L();
             break;
         case echo_message::msg_type::MSG3L:
-            build_msg3L();
+            //build_msg3L();
             break;
         case echo_message::msg_type::MSG4L:
-            build_msg4L();
+            //build_msg4L();
             break;
         case echo_message::msg_type::MSG5L:
-            build_msg5L();
+            //build_msg5L();
             break;
     }
 }
 
 void flatbuffers_echo::serialize_message(dmtr_sgarray_t &sga) {
+    flatbuffers::FlatBufferBuilder getBuilder;
+    flatbuffers::Offset<flatbuffers::String> string_offset(getBuilder.CreateString(string_field));
+    GetMessageFBBuilder getMsg(getBuilder);
+    getMsg.add_key(string_offset);
+    auto final_get = getMsg.Finish();
+    getBuilder.Finish(final_get);
+    
     switch (my_msg_enum) {
         case echo_message::msg_type::GET:
             encode_msg(sga, getBuilder.GetBufferPointer(), getBuilder.GetSize());
             break;
         case echo_message::msg_type::PUT:
-            encode_msg(sga, putBuilder.GetBufferPointer(), putBuilder.GetSize());
+            //encode_msg(sga, putBuilder.GetBufferPointer(), putBuilder.GetSize());
             break;
         case echo_message::msg_type::MSG1L:
-            encode_msg(sga, msg1LBuilder.GetBufferPointer(), msg1LBuilder.GetSize());
+            //encode_msg(sga, msg1LBuilder.GetBufferPointer(), msg1LBuilder.GetSize());
             break;
         case echo_message::msg_type::MSG2L:
-            encode_msg(sga, msg2LBuilder.GetBufferPointer(), msg2LBuilder.GetSize());
+            //encode_msg(sga, msg2LBuilder.GetBufferPointer(), msg2LBuilder.GetSize());
             break;
         case echo_message::msg_type::MSG3L:
-            encode_msg(sga, msg3LBuilder.GetBufferPointer(), msg3LBuilder.GetSize());
+            //encode_msg(sga, msg3LBuilder.GetBufferPointer(), msg3LBuilder.GetSize());
             break;
         case echo_message::msg_type::MSG4L:
-            encode_msg(sga, msg4LBuilder.GetBufferPointer(), msg4LBuilder.GetSize());
+            //encode_msg(sga, msg4LBuilder.GetBufferPointer(), msg4LBuilder.GetSize());
             break;
         case echo_message::msg_type::MSG5L:
-            encode_msg(sga, msg5LBuilder.GetBufferPointer(), msg5LBuilder.GetSize());
+            //encode_msg(sga, msg5LBuilder.GetBufferPointer(), msg5LBuilder.GetSize());
             break;
     }
 }
@@ -177,7 +184,7 @@ void flatbuffers_echo::handle_msg(uint8_t* buf) {
 
 }
 
-void flatbuffers_echo::build_get() {
+/*void flatbuffers_echo::build_get() {
     getMsg.add_key(string_offset);
     auto final_get = getMsg.Finish();
     getBuilder.Finish(final_get);
@@ -260,5 +267,5 @@ void flatbuffers_echo::build_msg5L() {
     auto final_msg = msg5L.Finish();
     msg5LBuilder.Finish(final_msg);
 
-}
+}*/
 
