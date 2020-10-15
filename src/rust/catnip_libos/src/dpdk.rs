@@ -1,5 +1,19 @@
+use byteorder::{NativeEndian, ByteOrder};
 use crate::{
     bindings::{
+        ETH_SPEED_NUM_NONE,
+        IPPROTO_UDP,
+        rte_eth_ntuple_filter,
+        RTE_ETH_FILTER_NTUPLE,
+        RTE_PKTMBUF_HEADROOM,
+        RTE_ETH_FLOW_NONFRAG_IPV4_UDP,
+        RTE_ETH_INPUT_SET_L3_DST_IP4,
+        RTE_ETH_INPUT_SET_L4_UDP_DST_PORT,
+        RTE_ETH_INPUT_SET_SELECT,
+        rte_eth_addr,
+        rte_eth_dev_filter_ctrl,
+        RTE_ETH_FILTER_FDIR,
+        rte_eth_dev_filter_supported,
         rte_delay_us_block,
         rte_eal_init,
         rte_eth_conf,
@@ -17,6 +31,7 @@ use crate::{
         rte_eth_macaddr_get,
         rte_eth_promiscuous_enable,
         rte_eth_rx_mq_mode_ETH_MQ_RX_RSS as ETH_MQ_RX_RSS,
+        rte_eth_rx_mq_mode_ETH_MQ_RX_NONE as ETH_MQ_RX_NONE,
         rte_eth_rx_queue_setup,
         rte_eth_rxconf,
         rte_eth_tx_mq_mode_ETH_MQ_TX_NONE as ETH_MQ_TX_NONE,
@@ -27,6 +42,7 @@ use crate::{
         rte_mempool,
         rte_pktmbuf_pool_create,
         rte_socket_id,
+        RTE_ETH_MAX_LEN,
         ETH_LINK_FULL_DUPLEX,
         ETH_LINK_UP,
         ETH_RSS_IP,
@@ -34,6 +50,10 @@ use crate::{
         RTE_ETH_DEV_NO_OWNER,
         RTE_MAX_ETHPORTS,
         RTE_MBUF_DEFAULT_BUF_SIZE,
+        DEV_TX_OFFLOAD_MULTI_SEGS,
+RTE_FDIR_MODE_PERFECT,
+         RTE_FDIR_PBALLOC_64K,
+         RTE_FDIR_NO_REPORT_STATUS,
     },
     runtime::DPDKRuntime,
 };
@@ -50,6 +70,7 @@ use std::{
     ptr,
     time::Duration,
 };
+use hashbrown::HashSet;
 
 macro_rules! expect_zero {
     ($name:ident ( $($arg: expr),* $(,)* )) => {{
@@ -60,6 +81,233 @@ macro_rules! expect_zero {
             Err(format_err!("{} failed with {:?}", stringify!($name), ret))
         }
     }};
+}
+
+
+const MAX_QUEUES_PER_PORT: usize = 16;
+const BASE_ETH_UDP_PORT: u16 = 10000;
+const NUM_RX_RING_ENTRIES: usize = 4096;
+const NUM_MBUFS: usize = NUM_RX_RING_ENTRIES * 2 - 1;
+const MTU: usize = 1024;
+const MBUF_SIZE: usize = mem::size_of::<rte_mbuf>() + RTE_PKTMBUF_HEADROOM + MTU;
+const NUM_TX_RING_DESC: usize = 128;
+
+struct ErpcDPDK {
+    used_qp_ids: HashSet<(usize, usize)>,
+    port_initialized: [bool; RTE_MAX_ETHPORTS],
+    mempool_arr: [[*mut rte_mempool; MAX_QUEUES_PER_PORT]; RTE_MAX_ETHPORTS],
+}
+
+#[derive(Debug)]
+struct Resolve {
+    ipv4_addr: u32,
+    mac_addr: [u8; 6],
+    bandwidth: usize,
+}
+
+impl ErpcDPDK {
+    pub fn new() -> Self {
+        Self {
+            used_qp_ids: HashSet::new(),
+            port_initialized: [false; RTE_MAX_ETHPORTS],
+            mempool_arr: [[ptr::null_mut(); MAX_QUEUES_PER_PORT]; RTE_MAX_ETHPORTS],
+        }
+    }
+
+    pub fn dpdk_transport(&mut self, phy_port: u8, numa_node: usize) {
+        let mut qp_id = None;
+        let mut rx_flow_udp_port = 0;
+
+        for i in 0..MAX_QUEUES_PER_PORT {
+            if !self.used_qp_ids.contains(&(phy_port, i)) {
+                qp_id = Some(i);
+                rx_flow_udp_port = self.udp_port_for_queue(phy_port, qp_id);
+                break;
+            }
+        }
+        let qp_id = qp_id.expect("No queues available");
+        self.used_qp_ids.insert((phy_port, qp_id));
+
+        // Initialize DPDK
+        let rte_argv = &["-c", "1", "-n", "7", "--log-level", "0", "-m", "1024"];
+        let rte_argv: Vec<_> = rte_argv.iter().map(CStr::new).collect();
+        let ret = unsafe { rte_eal_init(rte_argv.len() rte_argv.as_ptr() as *mut _) };
+        assert!(ret >= 0, "Failed to initialize DPDK");
+
+        // Initialize the port
+        if !self.port_initialized[phy_port] {
+            self.port_initialized[phy_port] = true;
+            self.setup_phy_port(phy_port);
+        }
+
+        let mempool = self.mempool_arr[phy_port][qp_id];
+        let resolve = self.resolve_phy_port();
+
+        todo!();
+    }
+
+    fn resolve_phy_port(&self, phy_port: usize) -> Resolve {
+        let mut mac: rte_ether_addr = unsafe { MaybeUninit::zeroed().assume_init() };
+        unsafe { rte_eth_macaddr_get(phy_port, &mut mac as *mut _) };
+
+        let link: rte_eth_link = unsafe { MaybeUninit::zeroed().assume_init() };
+        unsafe { rte_eth_link_get(phy_port as u8, &link as *mut _) };
+        assert_eq!(link.link_status, ETH_LINK_UP);
+        assert_ne!(link.link_speed, ETH_SPEED_NUM_NONE);
+        assert!(link.link_speed >= 10000);
+        let bandwidth = link.link_speed * 1000 * 1000 / 8;
+        Resolve {
+            ipv4_addr: self.get_port_ipv4_addr(phy_port),
+            mac_addr: mac.addr_bytes,
+            bandwidth,
+        }
+    }
+
+    fn udp_port_for_queue(&self, phy_port: usize, qp_id: usize) -> u16 {
+        BASE_ETH_UDP_PORT + (py_port as u16 * MAX_QUEUES_PER_PORT) + qp_id as u16;
+    }
+
+    fn setup_phy_port(&mut self, phy_port: usize) {
+        let nb_ports = unsafe { rte_eth_dev_count_avail() };
+        assert!(nb_ports > 0);
+        assert!(phy_port < nb_ports);
+
+        let dev_info = unsafe {
+            let mut d = MaybeUninit::zeroed();
+            rte_eth_dev_info_get(port_id, d.as_mut_ptr());
+            d.assume_init()
+        };
+
+        // Create per-thread RX and TX queues
+        let mut eth_conf: rte_eth_conf = unsafe { MaybeUninit::zeroed().assume_init() };
+        eth_conf.rxmode.mq_mode = ETH_MQ_RX_NONE;
+        eth_conf.rxmode.max_pkt_len = RTE_ETH_MAX_LEN;
+        eth_conf.rxmode.offloads = 0;
+
+        eth_conf.txmode.mq_mode = ETH_MQ_RX_NONE;
+        eth_conf.txmode.offloads = DEV_TX_OFFLOAD_MULTI_SEGS;
+
+        eth_conf.fdir_conf.mode = RTE_FDIR_MODE_PERFECT;
+        eth_conf.fdir.pballoc = RTE_FDIR_PBALLOC_64K;
+        eth_conf.fdir.status = RTE_FDIR_NO_REPORT_STATUS;
+        eth_conf.fdir_conf.mask.dst_port_mask = 0xffff;
+        eth_conf.fdir_conf.drop_queue = 0;
+
+        let ret = unsafe { rte_eth_dev_configure(
+            port_id,
+            rx_rings,
+            tx_rings,
+            &port_conf as *const _,
+        ) };
+        assert_eq!(ret, 0);
+
+        // Set the flow director fields.
+        assert_eq!(unsafe { rte_eth_dev_filter_supported(phy_port, RTE_ETH_FILTER_FDIR) }, 0);
+        let mut fi = unsafe { MaybeUninit::zeroed().assume_init() };
+        fi.info.input_set_conf.flow_type = RTE_ETH_FLOW_NONFRAG_IPV4_UDP;
+        fi.info.input_set_conf.inset_size = 2;
+        fi.info.input_set_conf.field[0] = RTE_ETH_INPUT_SET_L3_DST_IP4;
+        fi.info.input_set_conf.field[1] = RTE_ETH_INPUT_SET_L4_UDP_DST_PORT;
+        fi.info.input_set_conf.op = RTE_ETH_INPUT_SET_SELECT;
+
+        let ret = unsafe {
+            rte_eth_dev_filter_ctrl(phy_port, RTE_ETH_FILTER_FDIR, RTE_ETH_FILTER_SET, &fi as *const _)
+        };
+        assert_eq!(ret, 0);
+
+        for i in 0..MAX_QUEUES_PER_PORT {
+            let name = CString::new(format!("demikernel-{}-{}", phy_port, i)).unwrap();
+            let pool = unsafe {
+                rte_pktmbuf_pool_create(
+                    name.as_ptr(),
+                    NUM_MBUFS as u32,
+                    0, // cache,
+                    0, // priv size,
+                    MBUF_SIZE,
+                    numa_node,
+                );
+            };
+            assert!(!pool.is_null());
+            self.mempool_arr[phy_port][i] = pool;
+
+            let mut rx_conf: rte_eth_rxconf = unsafe { MaybeUninit::zeroed().assume_init() };
+            rx_conf.rx_thresh.pthresh = 8;
+            rx_conf.rx_thresh.hthresh = 0;
+            rx_conf.rx_thresh.wthresh = 0;
+            rx_conf.rx_free_thresh = 0;
+            rx_conf.rx_drop_en = 0;
+
+            let ret = unsafe {
+                rte_eth_rx_queue_setup(
+                    phy_port,
+                    i,
+                    NUM_RX_RING_ENTRIES,
+                    numa_node,
+                    &rx_conf as *const _,
+                    self.mempool_arr[phy_port][i],
+                )
+            };
+            assert_eq!(ret, 0);
+
+            let mut tx_conf: rte_eth_txconf = unsafe { MaybeUninit::zeroed().assume_init() };
+            tx_conf.tx_thresh.pthresh = 32;
+            tx_conf.tx_thresh.hthresh = 0;
+            tx_conf.tx_thresh.wthresh = 0;
+            tx_conf.tx_free_thresh = 30;
+            tx_conf.tx_rs_thresh = 0;
+            tx_conf.offloads = OFFLOADS;
+
+            let ret = unsafe {
+                rte_eth_tx_queue_setup(
+                    phy_port,
+                    i,
+                    NUM_TX_RING_DESC,
+                    numa_node,
+                    &tx_conf as *const _,
+                )
+            };
+            assert_eq!(ret, 0);
+
+            self.install_flow_rule(phy_port, i);
+        }
+
+        let ret = unsafe { rte_eth_dev_start(phy_port) };
+        assert_eq!(ret, 0);
+    }
+
+    fn get_port_ipv4_addr(&self, phy_port: usize) -> u32 {
+        let mut mac: rte_ether_addr = unsafe { MaybeUninit::zeroed().assert_init() };
+        unsafe { rte_eth_macaddr_get(phy_port, &mut mac as *mut _) };
+        NativeEndian::read_u32(&mac.addr_bytes[0..2])
+    }
+
+    fn install_flow_rule(&self, phy_port: usize, qp_id: usize) {
+        let ipv4_addr = self.get_port_ipv4_addr(phy_port);
+        let udp_port = self.udp_port_for_queue(phy_port, i);
+
+        assert_eq!(unsafe { rte_eth_dev_filter_supported(phy_port, RTE_ETH_FILTER_NTUPLE) }, 0);
+
+        let ntuple: rte_eth_ntuple_filter = unsafe { MaybeUninit::zeroed().assume_init() };
+        ntuple.flags = RTE_5TUPLE_FLAGS;
+        ntuple.dst_port = udp_port.to_be();
+        ntuple.dst_port_mask = std::u16::MAX;
+        ntuple.dst_ip = ipv4_addr.to_be();
+        ntuple.dst_ip_mask = std::u32::MAX;
+        ntuple.proto = IPPROTO_UDP;
+        ntuple.proto_mask = std::u8::MAX;
+        ntuple.priority = 1;
+        ntuple.queue = qp_id;
+
+        let ret = unsafe {
+            rte_eth_dev_filter_ctrl(
+                phy_port,
+                RTE_ETH_FILTER_NTUPLE,
+                RTE_ETH_FILTER_ADD,
+                &ntuple as *const _,
+            )
+        };
+        assert_eq!(ret, 0);
+    }
 }
 
 pub fn initialize_dpdk(
