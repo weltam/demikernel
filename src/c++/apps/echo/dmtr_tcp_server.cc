@@ -36,7 +36,7 @@
 #include <rte_common.h>
 #include <rte_mbuf.h>
 
-#define DMTR_PROFILE
+// #define DMTR_PROFILE
 #define NUM_CONNECTIONS 20
 // #define OPEN2
 // general file descriptors
@@ -178,8 +178,6 @@ int main(int argc, char *argv[])
         dmtr_set_zero_copy();
         out_sga.sga_numsegs = num_send_segments; // so it doesn't error out
         DMTR_OK(dmtr_init_mempools(packet_size, num_send_segments));
-        fill_in_sga_no_alloc(out_sga, num_send_segments);
-        
     } else {
         // initialize serialized data structure that will be sent back
         if (!run_protobuf_test) {
@@ -227,6 +225,7 @@ int main(int argc, char *argv[])
     dmtr_qresult_t wait_out;
 
     int idx = 0;
+    printf("Before waiting, fqd is: %d\n", fqd);
     while (1) {
         int status = dmtr_wait_any(&wait_out, &idx, tokens.data(), tokens.size());
 
@@ -278,6 +277,7 @@ int main(int argc, char *argv[])
                 
 #ifdef DMTR_OPEN2
                 if (0 != fqd) {
+                    printf("Fqd is %d\n", fqd);
                     // log to file
 #ifdef DMTR_PROFILE
                     auto t0 = boost::chrono::steady_clock::now();
@@ -339,7 +339,6 @@ int main(int argc, char *argv[])
 #endif
                 }
                 // make sure to assign the outgoing SGA the right ID
-                printf("Received packet with id %d\n", echo_id);
                 if (run_protobuf_test && !is_malloc_baseline) {
                     pushed_buffers[idx].id = echo_id;
                     DMTR_OK(dmtr_push(&push_tokens[idx], wait_out.qr_qd, &pushed_buffers[idx]));

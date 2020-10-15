@@ -37,6 +37,7 @@ private:
 struct lwip_sga {
     uint32_t num_segments;
     uint32_t segment_sizes[MAX_NUM_SEGMENTS];
+    uint32_t total_size;
 } typedef lwip_sga_t;
 
 namespace dmtr {

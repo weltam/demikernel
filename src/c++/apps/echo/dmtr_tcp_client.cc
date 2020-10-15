@@ -1,5 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
+#define BOOST_CHRONO_VERSION 2
 
 #include "common.hh"
 #include "capnproto.hh"
@@ -32,7 +33,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
-
+#include <boost/chrono/chrono_io.hpp>
 #define DMTR_PROFILE
 #include <rte_common.h>
 #include <rte_mbuf.h>
@@ -44,9 +45,19 @@ int qd;
 dmtr_sgarray_t sga = {};
 echo_message *echo = NULL;
 bool free_buf = false;
+boost::chrono::time_point<boost::chrono::system_clock> exp_start;
+boost::chrono::time_point<boost::chrono::system_clock> exp_end;
+
+
 //#define TRAILING_REQUESTS 
 //#define WAIT_FOR_ALL
 void finish() {
+    exp_end = boost::chrono::system_clock::now();
+    auto dt = exp_end - exp_start;
+    using namespace boost::chrono;
+    std::cout << time_fmt(boost::chrono::timezone::local, "%H:%M:%S") <<
+    system_clock::now() << '\n';
+    std::cerr << "Start: " << time_fmt(boost::chrono::timezone::local) << exp_start << "; End: " <<  time_fmt(boost::chrono::timezone::local) << exp_end << "; Total time taken: " << dt.count() << std::endl;
     std::cerr << "Sent: " << sent << "  Recved: " << recved << std::endl;
     if (free_buf) {
         dmtr_sgafree(&sga);
@@ -158,6 +169,7 @@ int main(int argc, char *argv[]) {
         }
     }
     uint32_t last_sent = 0;
+    exp_start = boost::chrono::system_clock::now();
     // run a simpler test with retries turned on
     if (retries) {
 
@@ -254,7 +266,7 @@ int main(int argc, char *argv[]) {
                 auto dt = boost::chrono::steady_clock::now() - start_times[c];
 
                 // check that the  message ID is correct for this client
-                if (wait_out.qr_value.sga.id <= current_packet[c]) {
+                if (wait_out.qr_value.sga.id < current_packet[c]) {
                     // old packet coming to haunt us
                     printf("Received pkt with old id\n");
                     continue;

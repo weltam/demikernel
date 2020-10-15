@@ -733,10 +733,12 @@ int dmtr::lwip_queue::push_thread(task::thread_type::yield_type &yield, task::th
             pkts[0]->data_len = 0;
             pkts[0]->pkt_len = 0;
             for (size_t i = 1; i < lwip_sga->num_segments; i++) {
-                if (i == (lwip_sga->num_segments - 1)) {
-                    DMTR_OK(rte_pktmbuf_alloc(pkts[i], payload_mbuf_pool1));
-                } else {
+                if (i < (lwip_sga->total_size % lwip_sga->num_segments)) {
+                    // larger segment size
                     DMTR_OK(rte_pktmbuf_alloc(pkts[i], payload_mbuf_pool2));
+                } else {
+                    // smaller segment size
+                    DMTR_OK(rte_pktmbuf_alloc(pkts[i], payload_mbuf_pool1));
                 }
                 pkts[i]->data_len = 0;
                 pkts[i]->pkt_len = 0;
@@ -770,8 +772,10 @@ int dmtr::lwip_queue::push_thread(task::thread_type::yield_type &yield, task::th
         *id = htonl(sga->id);
         p += sizeof(*id);
 
+        //auto *data_ptr = p;
+
         // now add in the SGA id to be sent and deserialized on the other side.
-        uint32_t total_len = 0; // Length of data written so far.
+        uint32_t total_len = sizeof(*id); // Length of data written so far.
 
 #ifdef DMTR_NO_SER
         for (size_t i = 0; i < sga->sga_numsegs; i++) {
@@ -877,16 +881,27 @@ int dmtr::lwip_queue::push_thread(task::thread_type::yield_type &yield, task::th
             total_len += sizeof(*eth_hdr);
         }
 
+        // add in the sga ID to the "header size" to record data_len
+        header_size += sizeof(*id);
+
         if (zero_copy_mode) {
             pkt->data_len = lwip_sga->segment_sizes[0] + header_size;
             pkt->pkt_len = total_len;
             pkt->nb_segs = lwip_sga->num_segments;
             struct rte_mbuf* cur_pkt = pkt;
+            //printf("Segment 0 data_len: %u\n", pkt->data_len);
+            //char *payload = reinterpret_cast<char *>(data_ptr);
+            //size_t payload_length = pkt->data_len - header_size;
+            //printf("0th segment, first byte of payload: %c, 2nd: %c, 2nd to last: %c, last: %c\n", payload[0], payload[1], payload[payload_length - 2], payload[payload_length - 1]);
             for (size_t i = 1; i < lwip_sga->num_segments; i++) {
                 struct rte_mbuf* prev = cur_pkt;
                 cur_pkt = pkts[i];
                 prev->next = cur_pkt;
                 cur_pkt->data_len = lwip_sga->segment_sizes[i];
+                //printf("Segment %zu data_len: %u\n", i, cur_pkt->data_len);
+                //payload_length = cur_pkt->data_len;
+                //payload = reinterpret_cast<char *>(get_data_pointer(cur_pkt, false));
+                //printf("%zuth segment, first byte of payload: %c, 2nd: %c, 2nd to last: %c, last: %c\n", i, payload[0], payload[1], payload[payload_length - 2], payload[payload_length - 1]);
                 cur_pkt->pkt_len = lwip_sga->segment_sizes[i];
                 if ( i == (lwip_sga->num_segments - 1) ) {
                     cur_pkt->next = NULL;
@@ -1183,6 +1198,7 @@ dmtr::lwip_queue::parse_packet(struct sockaddr_in &src,
     // get the ID
     sga.id = ntohl(*reinterpret_cast<uint32_t *>(p));
     p += sizeof(uint32_t);
+    header += sizeof(uint32_t);
 
 #ifdef DMTR_NO_SER
     sga.sga_numsegs = 1;
@@ -1212,7 +1228,18 @@ dmtr::lwip_queue::parse_packet(struct sockaddr_in &src,
 #else
     if (zero_copy_mode) {
         sga.sga_segs[0].sgaseg_buf = p;
+        //printf("Received %zu of data\n", pkt->pkt_len - header);
         sga.sga_segs[0].sgaseg_len = pkt->pkt_len - header;
+        // check the bytes that they were actually sent.
+        //char *payload = reinterpret_cast<char *>(p);
+        //size_t payload_length = pkt->pkt_len - header;
+        //printf("RECVD: pkt:%u, data_len: %u\n", pkt->pkt_len, pkt->data_len);
+        //for (size_t i = 0; i < lwip_sga->num_segments; i++) {
+            //payload_length = lwip_sga->segment_sizes[i];
+            //printf("---->RECVD: idx: %zu, first byte of payload: %c, 2nd: %c, 2nd to last: %c, last: %c\n", i, payload[0], payload[1], payload[payload_length - 2], payload[payload_length - 1]);
+            //payload += lwip_sga->segment_sizes[i];
+        //}
+
     } else {
         for (size_t i = 0; i < sga.sga_numsegs; ++i) {
             // segment length
@@ -1583,14 +1610,19 @@ int dmtr::lwip_queue::init_mempools(uint32_t message_size, uint32_t num_segments
     // initialize the lwip sga
     lwip_sga->num_segments = num_segments;
     uint32_t segment_size = message_size / num_segments;
-    uint32_t last_segment_size = segment_size;
+    uint32_t remaining = (message_size % num_segments);
+    uint32_t last_segment_size = segment_size + remaining;
+    lwip_sga->total_size = message_size;
     for (uint32_t i = 0; i < num_segments; i++) {
         lwip_sga->segment_sizes[i] = segment_size;
-        if (i == num_segments - 1) {
-            last_segment_size  = message_size - (segment_size * (num_segments - 1));
-            lwip_sga->segment_sizes[i] = last_segment_size;
+        if (i < remaining) {
+            lwip_sga->segment_sizes[i] += 1; // have the larger number of segments
         }
     }
+
+    /*for (uint32_t i = 0; i < num_segments; i++) {
+        printf("Segment %zu size: %zu\n", i, lwip_sga->segment_sizes[i]);
+    }*/
 
     const uint16_t nb_ports = rte_eth_dev_count_avail();
     DMTR_TRUE(ENOENT, nb_ports > 0);
@@ -1606,6 +1638,7 @@ int dmtr::lwip_queue::init_mempools(uint32_t message_size, uint32_t num_segments
                                     MBUF_BUF_SIZE,
                                     rte_socket_id()));
     header_mbuf_pool = mbuf_pool;
+    mbuf_pool = NULL;
 
     // for struct of the segment size
     DMTR_OK(rte_pktmbuf_pool_create(
@@ -1617,6 +1650,7 @@ int dmtr::lwip_queue::init_mempools(uint32_t message_size, uint32_t num_segments
                                     MBUF_BUF_SIZE,
                                     rte_socket_id()));
     payload_mbuf_pool1 = mbuf_pool;
+    mbuf_pool = NULL;
    
     // if last segment in scatter has an unequal segment size    
     DMTR_OK(rte_pktmbuf_pool_create(
@@ -1666,7 +1700,8 @@ void dmtr::lwip_queue::custom_init(struct rte_mempool *mp, void *opaque_arg, voi
     }
     char *s = reinterpret_cast<char *>(p);
     memset(s, FILL_CHAR, dmtr::lwip_queue::current_segment_size);
-    s[current_segment_size - 1] = '\0';
+    s[0] = 'd';
+    s[dmtr::lwip_queue::current_segment_size - 1] = 'b';
 }
 
 

@@ -180,14 +180,15 @@ Latency_Dump(FILE *f, dmtr_latency_t *l)
         ppnext = &nextTypes[type];
 
         // Find the median
-        uint64_t accum = 0;
+        /* uint64_t accum = 0;
         int medianBucket;
         for (medianBucket = 0; medianBucket < LATENCY_NUM_BUCKETS;
              ++medianBucket) {
             accum += d->buckets[medianBucket];
             if (accum >= d->count / 2)
                 break;
-        }
+        } */
+        
 
         char extra[3] = {'/', (char)type, 0};
         if (type == '=')
@@ -195,7 +196,8 @@ Latency_Dump(FILE *f, dmtr_latency_t *l)
         fprintf(f, "LATENCY %s%s: %s %s/%s %s (%lu samples, %s total)\n",
                 l->name.c_str(), extra, LatencyFmtNSFull(d->min, buf[0]),
                 LatencyFmtNSFull(d->total / d->count, buf[1]),
-                LatencyFmtNSFull((uint64_t)1 << medianBucket, buf[2]),
+                //LatencyFmtNSFull((uint64_t)1 << medianBucket, buf[2]),
+                LatencyFmtNSFull(l->latencies.at((int)(float)l->latencies.size() * 0.50), buf[2]),
                 LatencyFmtNSFull(d->max, buf[3]), d->count,
                 LatencyFmtNSFull(d->total, buf[4]));
     }
@@ -254,7 +256,6 @@ Latency_Dump(FILE *f, dmtr_latency_t *l)
             lastPrinted = i;
         }
     }
-
     return 0;
 }
 
