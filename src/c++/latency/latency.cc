@@ -175,6 +175,8 @@ Latency_Dump(FILE *f, dmtr_latency_t *l)
     int nextTypes[LATENCY_MAX_DIST];
     int *ppnext = &firstType;
 
+    l->latencies.shrink_to_fit();
+    sort(l->latencies.begin(), l->latencies.end());
     for (int type = 0; type < LATENCY_MAX_DIST; ++type) {
         Latency_Dist_t *d = l->dists[type];
         if (!d)
@@ -205,8 +207,6 @@ Latency_Dump(FILE *f, dmtr_latency_t *l)
                 LatencyFmtNSFull(d->total, buf[4]));
     }
     *ppnext = -1;
-    l->latencies.shrink_to_fit();
-    sort(l->latencies.begin(), l->latencies.end());
     fprintf(f, "TAIL LATENCY 99=%s 99.9=%s 99.99=%s\n",
 	    LatencyFmtNSFull(l->latencies.at((int)((float)l->latencies.size() * 0.99)), buf[0]),
 	    LatencyFmtNSFull(l->latencies.at((int)((float)l->latencies.size() * 0.999)), buf[1]),

@@ -50,7 +50,6 @@ boost::chrono::time_point<boost::chrono::system_clock> exp_end;
 
 
 //#define TRAILING_REQUESTS 
-//#define WAIT_FOR_ALL
 void finish() {
     exp_end = boost::chrono::system_clock::now();
     auto dt = exp_end - exp_start;
@@ -199,7 +198,7 @@ int main(int argc, char *argv[]) {
         dmtr_qtoken_t push_tokens[clients];
         dmtr_qtoken_t pop_tokens[clients*2];
         dmtr_qtoken_t timer_q_push[clients];
-        int timeout = 500000;
+        int timeout = 800000;
         
         // set up our signal handlers
         if (signal(SIGINT, sig_handler) == SIG_ERR)
@@ -347,8 +346,8 @@ int main(int argc, char *argv[]) {
 
     dmtr_qtoken_t push_tokens[clients];
     dmtr_qtoken_t pop_tokens[clients];
-    uint32_t current_packet[clients];
-    boost::chrono::time_point<boost::chrono::steady_clock> start_times[clients];
+    std::unordered_map<uint32_t, boost::chrono::time_point<boost::chrono::steady_clock>> start_times; 
+    std::unordered_map<uint32_t, uint32_t> seqno_to_client;
 
     // set up our signal handlers
     if (signal(SIGINT, sig_handler) == SIG_ERR)
@@ -357,89 +356,48 @@ int main(int argc, char *argv[]) {
     // start all the clients
     for (uint32_t c = 0; c < clients; c++) {
         last_sent++;
-        current_packet[c] = last_sent;
+        seqno_to_client.insert(std::make_pair(last_sent, c));
         sga.id = last_sent;
+        
         // push message to server
         DMTR_OK(dmtr_push(&push_tokens[c], qd, &sga));
         sent++;
         // async pop
         DMTR_OK(dmtr_pop(&pop_tokens[c], qd));
         // record start time
-        start_times[c] = boost::chrono::steady_clock::now();
+        start_times.insert(std::make_pair(last_sent, boost::chrono::steady_clock::now()));
     }
     
     int ret;
     dmtr_qresult_t wait_out;
     allocate_segments(&wait_out.qr_value.sga, num_recv_segments);
-    // receive SGA: should have 1 segment if we're in DMTR_NO_SER,
-    // otherwise, the receive sga will have the normal number of segments
     
-    //iterations *= clients;
     do {
-#ifdef WAIT_FOR_ALL
-        // wait for all the clients
-        for (uint32_t c = 0; c < clients; c++) {
-            ret = dmtr_wait(&wait_out, pop_tokens[c]);
-            recved++;
-            DMTR_OK(dmtr_drop(push_tokens[c]));
-            DMTR_OK(dmtr_sgafree(&wait_out.qr_value.sga));
-            if (wait_out.qr_value.sga.recv_segments != NULL) {
-                rte_pktmbuf_free((struct rte_mbuf*) wait_out.qr_value.sga.recv_segments);
-            }
-            // count the iteration
-            iterations--;
-        }
-        auto dt = boost::chrono::steady_clock::now() - start_times[0];
-        DMTR_OK(dmtr_record_latency(latency, dt.count()));
-        // restart the clock
-        start_times[0] = boost::chrono::steady_clock::now();
-        // send all again
-        for (uint32_t c = 0; c < clients; c++) {
-#ifndef TRAILING_REQUESTS        
-            // if there are fewer than clients left, then we just wait for the responses
-            if (iterations < clients) {
-                pop_tokens[c] = 0;
-                continue;
-            }
-#endif
-            // start again
-            // push back to the server
-            last_sent += 1;
-            current_packet[c] = last_sent;
-            sga.id = last_sent;
-            DMTR_OK(dmtr_push(&push_tokens[c], qd, &sga));
-            sent++;
-            // async pop
-            DMTR_OK(dmtr_pop(&pop_tokens[c], qd));
-        }
-#else
         int idx = 0;
         // wait for a returned value
         ret =  dmtr_wait_any(&wait_out, &idx, pop_tokens, clients);
-        // handle the returned value
-        //record the time
-        auto dt = boost::chrono::steady_clock::now() - start_times[idx];
+        uint32_t seqno = wait_out.qr_value.sga.id;
+        uint32_t client_idx = seqno_to_client.at(seqno);
+        
+        auto dt = boost::chrono::steady_clock::now() - start_times.at(seqno);
         DMTR_OK(dmtr_record_latency(latency, dt.count()));
-        // should be done by now
-        //DMTR_OK(dmtr_wait(NULL, push_tokens[idx]));
-        //DMTR_TRUE(ENOTSUP, DMTR_OPC_POP == qr.qr_opcode);
-        //DMTR_TRUE(ENOTSUP, qr.qr_value.sga.sga_numsegs == 1);
-        //DMTR_TRUE(ENOTSUP, (reinterpret_cast<uint8_t *>(qr.qr_value.sga.sga_segs[0].sgaseg_buf)[0] == FILL_CHAR);
-        //DMTR_OK(dmtr_wait(NULL, qt));
+        
         recved++;
-
-        // finished a full echo
+        seqno_to_client.erase(seqno_to_client.find(seqno));
+        start_times.erase(start_times.find(seqno));
+        
         // free the allocated sga
         DMTR_OK(dmtr_sgafree(&wait_out.qr_value.sga));
         if (wait_out.qr_value.sga.recv_segments != NULL) {
             rte_pktmbuf_free((struct rte_mbuf*) wait_out.qr_value.sga.recv_segments);
         }
+
         // count the iteration
         iterations--;
         // drop the push token from this echo
-        if (push_tokens[idx] != 0) {
-            DMTR_OK(dmtr_drop(push_tokens[idx]));
-            push_tokens[idx] = 0;
+        if (push_tokens[client_idx] != 0) {
+            DMTR_OK(dmtr_drop(push_tokens[client_idx]));
+            push_tokens[client_idx] = 0;
         }
 
 #ifndef TRAILING_REQUESTS        
@@ -450,17 +408,16 @@ int main(int argc, char *argv[]) {
         }
 #endif
         last_sent++;
-        current_packet[idx] = last_sent;
+        seqno_to_client.insert(std::make_pair(last_sent, client_idx));
         sga.id = last_sent;
         // start again
         // push back to the server
-        DMTR_OK(dmtr_push(&push_tokens[idx], qd, &sga));
+        DMTR_OK(dmtr_push(&push_tokens[client_idx], qd, &sga));
         sent++;
         // async pop
         DMTR_OK(dmtr_pop(&pop_tokens[idx], qd));
         // restart the clock
-        start_times[idx] = boost::chrono::steady_clock::now();
-#endif
+        start_times.insert(std::make_pair(last_sent, boost::chrono::steady_clock::now()));
     } while (iterations > 0 && ret == 0);
 
     finish();
