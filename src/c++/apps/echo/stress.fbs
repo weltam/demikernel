@@ -2,7 +2,6 @@ namespace stress;
 
 table GetMessageFB {
     key:string;
-    id:int32;
 }
 
 table PutMessageFB {

@@ -81,6 +81,9 @@ int main(int argc, char *argv[]) {
     DMTR_OK(dmtr_init(argc, argv));
 
     DMTR_OK(dmtr_new_latency(&latency, "end-to-end"));
+    if (boost::none != latency_log) {
+        DMTR_OK(dmtr_add_of(latency, boost::get(latency_log).c_str()));
+    }
 
     DMTR_OK(dmtr_socket(&qd, AF_INET, SOCK_STREAM, 0));
     printf("client qd:\t%d\n", qd);
@@ -172,15 +175,21 @@ int main(int argc, char *argv[]) {
     exp_start = boost::chrono::system_clock::now();
     // run a simpler test with retries turned on
     if (retries) {
-
         // one more iteration: don't count first
-        iterations += 1;
+        // iterations += 1;
         // set up timers for each client
         int timer_qds[clients];
 
         for (uint32_t c = 0; c < clients; c++) {
             DMTR_OK(dmtr_new_timer(&timer_qds[c]));
+            //printf("Timer queue # %u: %d\n", c, timer_qds[c]);
         }
+
+        // maps seq number of request to start time
+        std::unordered_map<uint32_t, boost::chrono::time_point<boost::chrono::steady_clock>> start_times;
+        // maps seq number to push client/timer ID
+        std::unordered_map<uint32_t, uint32_t> seqno_to_client;
+        std::unordered_map<uint32_t, uint32_t> client_to_seqno;
 
         int ret;
         int num_retries = 0;
@@ -190,12 +199,7 @@ int main(int argc, char *argv[]) {
         dmtr_qtoken_t push_tokens[clients];
         dmtr_qtoken_t pop_tokens[clients*2];
         dmtr_qtoken_t timer_q_push[clients];
-        // timeout is 100 us
         int timeout = 500000;
-
-        boost::chrono::time_point<boost::chrono::steady_clock> start_times[clients];
-        boost::chrono::time_point<boost::chrono::steady_clock> timer_times[clients];
-        int current_packet[clients]; // which packet ID are these clients sending
         
         // set up our signal handlers
         if (signal(SIGINT, sig_handler) == SIG_ERR)
@@ -205,19 +209,22 @@ int main(int argc, char *argv[]) {
         for (uint32_t c = 0; c < clients; c++) {
             // last sent packet
             last_sent += 1;
-            current_packet[c] = last_sent;
+            seqno_to_client.insert(std::make_pair(last_sent, c));
+            client_to_seqno.insert(std::make_pair(c, last_sent));
             sga.id = last_sent;
 
             // first push and pop
             DMTR_OK(dmtr_push(&push_tokens[c], qd, &sga));
             sent++;
             DMTR_OK(dmtr_pop(&pop_tokens[2*c], qd));
-            start_times[c] = boost::chrono::steady_clock::now();
             
-            // reset for this client
+            // record start time
+            start_times.insert(std::make_pair(last_sent, boost::chrono::steady_clock::now()));
+            
+            // start timer for this client
             DMTR_OK(dmtr_push_tick(&timer_q_push[c], timer_qds[c], timeout));
-            timer_times[c] = boost::chrono::steady_clock::now();
             DMTR_OK(dmtr_pop(&pop_tokens[2*c+1], timer_qds[c]));
+            //printf("Sent seqno %u with pop token %lu\n", last_sent, pop_tokens[2*c]);
         } 
 
         int idx = 0;
@@ -228,72 +235,86 @@ int main(int argc, char *argv[]) {
 
             // one of clients timed out
             if (idx % 2 != 0) {
-                // client idx corresponding to timer idx
-                uint32_t c = (idx - 1)/2;
+                uint32_t client_idx = (idx - 1)/2;
+                uint32_t seqno = client_to_seqno.at(client_idx);
 
                 // first packet takes longer
                 if (recved != 0) {
                     // actual retry
                     num_retries++;
 
-                    // count time since timer fire
-                    auto dt = boost::chrono::steady_clock::now() - timer_times[c];
-                    auto sent_dt = boost::chrono::steady_clock::now() - start_times[c];
-                    std::cout << "Idx " << idx << " fired after " << dt.count() << " time, since sent: " << sent_dt.count() << " time, recvd so far: " << recved << ", pkt id: " << current_packet[c] <<  std::endl;
+                    auto sent_dt = boost::chrono::steady_clock::now() - start_times.at(seqno);
+                    std::cout << "Idx " << idx << " fired after " << sent_dt.count() << " time, since sent: " << sent_dt.count() << " time, recvd so far: " << recved << ", pkt id: " << seqno <<  std::endl;
                     // drop the push token from this echo
-                    if (push_tokens[c] != 0) {
-                        DMTR_OK(dmtr_drop(push_tokens[c]));
-                        push_tokens[c] = 0;
+                    if (push_tokens[client_idx] != 0) {
+                        DMTR_OK(dmtr_drop(push_tokens[client_idx]));
+                        push_tokens[client_idx] = 0;
                     }
-                    sga.id = current_packet[c]; // make sure pushed packet has correct ID
+                    sga.id = seqno; // make sure pushed packet has correct ID
                 
-                    DMTR_OK(dmtr_push(&push_tokens[c], qd, &sga));
+                    DMTR_OK(dmtr_push(&push_tokens[client_idx], qd, &sga));
+                    printf("Resent seq # %u\n", seqno);
                 }
                 
                 // reset the timeout
-                if (timer_q_push[c] != 0) {
-                    DMTR_OK(dmtr_drop(timer_q_push[c]));
-                    timer_q_push[c] = 0;
+                if (timer_q_push[client_idx] != 0) {
+                    DMTR_OK(dmtr_drop(timer_q_push[client_idx]));
+                    timer_q_push[client_idx] = 0;
                 }
                 
-                DMTR_OK(dmtr_push_tick(&timer_q_push[c], timer_qds[c], timeout));
-                timer_times[c] = boost::chrono::steady_clock::now();
-                DMTR_OK(dmtr_pop(&pop_tokens[2*c+1], timer_qds[c]));
-                //start_times[c] = boost::chrono::steady_clock::now();
+                DMTR_OK(dmtr_push_tick(&timer_q_push[client_idx], timer_qds[client_idx], timeout));
+                DMTR_OK(dmtr_pop(&pop_tokens[idx], timer_qds[client_idx]));
                 continue;
             } else {
-                uint32_t c = idx/2;
-                auto dt = boost::chrono::steady_clock::now() - start_times[c];
+                // received a packet
+                auto recved_time = boost::chrono::steady_clock::now();
+                uint32_t pop_idx = idx/2;
+                uint32_t seqno = wait_out.qr_value.sga.id;
 
-                // check that the  message ID is correct for this client
-                if (wait_out.qr_value.sga.id < current_packet[c]) {
-                    // old packet coming to haunt us
-                    printf("Received pkt with old id\n");
+                // if seqno is not in current outstanding packets, must be old
+                if (seqno_to_client.find(seqno) == seqno_to_client.end()) {
+                    printf("Received packet with old id: %u; not in outstanding seqno map; sent: %lu\n", seqno, sent);
+                    // add another pop, as this "took place" of packet that was
+                    // supposed to be received
+                    DMTR_OK(dmtr_pop(&pop_tokens[pop_idx * 2], qd));
                     continue;
-                } else if (wait_out.qr_value.sga.id > current_packet[c]) {
-                    std::cerr << "Cannot have packet ID, " << wait_out.qr_value.sga.id << ", greater than current received: " << current_packet[c] << std::endl;
-                } else {
-                    last_sent += 1;
-                    current_packet[c] = last_sent;
-                    sga.id = current_packet[c];
                 }
-                // ping came back
-                if (recved != 0) {
-                    DMTR_OK(dmtr_record_latency(latency, dt.count()));
+
+                uint32_t client_idx = seqno_to_client.at(seqno);
+                if (client_to_seqno.find(client_idx) == client_to_seqno.end() ||
+                        client_to_seqno.at(client_idx) != seqno) {
+                    printf("Received seqno %u for client %u but client %u's entry in client_to_seqno does not exist or is different\n", seqno, client_idx, client_idx);
+                    exit(1);
                 }
+                
+                //printf("Received seqno %u on pop idx %d\n", seqno, pop_idx);
+                // calculate start time
+                auto dt = recved_time - start_times.at(seqno);
+
+                // remove entries from maps
+                client_to_seqno.erase(client_to_seqno.find(client_idx));
+                seqno_to_client.erase(seqno_to_client.find(seqno));
+                start_times.erase(start_times.find(seqno));
+
+                last_sent += 1;
+                seqno = last_sent;
+                sga.id = seqno;
+
+                seqno_to_client.insert(std::make_pair(seqno, client_idx));
+                client_to_seqno.insert(std::make_pair(client_idx, seqno));
+                
+                DMTR_OK(dmtr_record_latency(latency, dt.count()));
                 recved++;
                 iterations--;
 
-                // finished a full echo
-                // drop the push token from this echo
-                if (push_tokens[c] != 0) {
-                    DMTR_OK(dmtr_drop(push_tokens[c]));
-                    push_tokens[c] = 0;
+                if (push_tokens[client_idx] != 0) {
+                    DMTR_OK(dmtr_drop(push_tokens[client_idx]));
+                    push_tokens[client_idx] = 0;
                 }
                 // drop timer token from this echo
-                if (timer_q_push[c] != 0) {
-                    DMTR_OK(dmtr_drop(timer_q_push[c]));
-                    timer_q_push[c] = 0;
+                if (timer_q_push[client_idx] != 0) {
+                    DMTR_OK(dmtr_drop(timer_q_push[client_idx]));
+                    timer_q_push[client_idx] = 0;
                 }
 
                 // free the recv buffer
@@ -302,16 +323,16 @@ int main(int argc, char *argv[]) {
                     rte_pktmbuf_free((struct rte_mbuf*) wait_out.qr_value.sga.recv_segments);
                 }
 
-
-                // send a new packet and reset timer
-                DMTR_OK(dmtr_push(&push_tokens[c], qd, &sga));
+                // send a new packet on the client_idx
+                DMTR_OK(dmtr_push(&push_tokens[client_idx], qd, &sga));
                 sent++;
-                DMTR_OK(dmtr_pop(&pop_tokens[2*c], qd));
-                start_times[c] = boost::chrono::steady_clock::now();
+                // pop on this popped token
+                DMTR_OK(dmtr_pop(&pop_tokens[pop_idx*2], qd));
+                //printf("Sent seqno %u with pop token %lu\n", seqno, pop_tokens[pop_idx]);
+                start_times.insert(std::make_pair(seqno, boost::chrono::steady_clock::now()));
                 
-                // set timeout
-                DMTR_OK(dmtr_push_tick(&timer_q_push[c], timer_qds[c], timeout));
-                timer_times[c] = boost::chrono::steady_clock::now();
+                // reset the timer corresponding to this pushed packet
+                DMTR_OK(dmtr_push_tick(&timer_q_push[client_idx], timer_qds[client_idx], timeout));
             }   
         } while (iterations > 0 && ret == 0);
         std::cout << "Final num retries: " << num_retries << std::endl;

@@ -273,7 +273,6 @@ bool dmtr::io_queue::has_task(dmtr_qtoken_t qt) {
 }
 
 int dmtr::io_queue::get_task(task *&t_out, dmtr_qtoken_t qt) {
-    //printf("Has task %lx: %d\n", qt, has_task(qt));
     DMTR_TRUE(ENOENT, has_task(qt));
     t_out = get_task(qt);
     DMTR_NOTNULL(ENOTSUP, t_out);

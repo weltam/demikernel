@@ -1280,6 +1280,9 @@ int dmtr::lwip_queue::poll(dmtr_qresult_t &qr_out, dmtr_qtoken_t qt)
     DMTR_TRUE(EINVAL, good());
 
     task *t;
+    if (!has_task(qt)) {
+        printf("In lwip queue for %d, cannot find task %lu\n", qd(), qt);
+    }
     DMTR_OK(get_task(t, qt));
 
     int ret;

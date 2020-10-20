@@ -19,6 +19,7 @@ int dmtr_new_latency(dmtr_latency_t **latency_out, const char *name);
 int dmtr_record_latency(dmtr_latency_t *latency, uint64_t ns);
 int dmtr_dump_latency(FILE *f, dmtr_latency_t *latency);
 int dmtr_delete_latency(dmtr_latency_t **latency);
+int dmtr_add_of(dmtr_latency_t *latency, const char *name);
 uint64_t dmtr_now_ns();
 
 #ifdef __cplusplus

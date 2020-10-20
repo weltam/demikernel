@@ -278,8 +278,8 @@ int dmtr::io_queue_api::push(dmtr_qtoken_t &qtok_out, int qd, const dmtr_sgarray
     DMTR_OK(get_queue(q, qd));
     dmtr_qtoken_t qt;
     DMTR_OK(q->new_qtoken(qt));
-    //printf("push: allocate a new q token: %lu %lu\n",qt, qt%MAX_TASKS);
-     //printf("push: done allocating\n");
+    //printf("push: allocate a new q token for queue %d: %lu %lu\n",qd, qt, qt%MAX_TASKS);
+    //printf("push: done allocating\n");
     DMTR_OK(q->push(qt, sga));
 
     qtok_out = qt;
@@ -322,7 +322,7 @@ int dmtr::io_queue_api::pop(dmtr_qtoken_t &qtok_out, int qd) {
     DMTR_OK(get_queue(q, qd));
     dmtr_qtoken_t qt;
     DMTR_OK(q->new_qtoken(qt));
-    //printf("pop: allocate a new q token: %lu %lu\n",qt, qt % MAX_TASKS);
+    //printf("pop: allocate a new q token for queue %d: %lu %lu\n",qd, qt, qt % MAX_TASKS);
     //printf("pop: done allocating\n");
     DMTR_OK(q->pop(qt));
 

@@ -13,6 +13,8 @@
 #include <stdint.h>
 #include <string>
 #include <vector>
+#include <iostream>
+#include <fstream>
 
 // The number of the maximum distribution type.  Since we use
 // characters as distribution types, this is 127.  We could probably
@@ -51,6 +53,7 @@ typedef struct dmtr_latency
     int distPoolNext = 0;
 
     std::vector<uint64_t> latencies;
+    const char* output_file;
 } dmtr_latency_t;
 
 static inline void
@@ -197,7 +200,7 @@ Latency_Dump(FILE *f, dmtr_latency_t *l)
                 l->name.c_str(), extra, LatencyFmtNSFull(d->min, buf[0]),
                 LatencyFmtNSFull(d->total / d->count, buf[1]),
                 //LatencyFmtNSFull((uint64_t)1 << medianBucket, buf[2]),
-                LatencyFmtNSFull(l->latencies.at((int)(float)l->latencies.size() * 0.50), buf[2]),
+                LatencyFmtNSFull(l->latencies.at((int)((float)l->latencies.size() * 0.50)), buf[2]),
                 LatencyFmtNSFull(d->max, buf[3]), d->count,
                 LatencyFmtNSFull(d->total, buf[4]));
     }
@@ -256,6 +259,15 @@ Latency_Dump(FILE *f, dmtr_latency_t *l)
             lastPrinted = i;
         }
     }
+
+    if (l->output_file != NULL) {
+        std::ofstream output;
+        output.open(l->output_file);
+        for (size_t i = 0; i < l->latencies.size(); i++) {
+            output << l->latencies.at(i) << std::endl;
+        }
+        output.close();
+    }
     return 0;
 }
 
@@ -302,4 +314,9 @@ int dmtr_delete_latency(dmtr_latency_t **latency) {
 uint64_t dmtr_now_ns() {
     auto t = boost::chrono::steady_clock::now();
     return t.time_since_epoch().count();
+}
+
+int dmtr_add_of(dmtr_latency_t *latency, const char *name) {
+    latency->output_file = name;
+    return 0;
 }

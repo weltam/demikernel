@@ -28,6 +28,7 @@ const char FILL_CHAR = 'a';
 boost::optional<std::string> file;
 std::string cereal_system = std::string("none");
 std::string message = std::string("none");
+boost::optional<std::string> latency_log;
 bool run_protobuf_test = false;
 uint32_t sga_size = 1;
 bool zero_copy = false;
@@ -47,6 +48,7 @@ void parse_args(int argc, char **argv, bool server)
         ("clients,c", value<uint32_t>(&clients)->default_value(1), "clients")
         ("config-path,r", value<std::string>(&config_path)->default_value("./config.yaml"), "specify configuration file")
         ("file", value<std::string>(), "log file")
+        ("latlog", value<std::string>(), "log file for latencies")
         ("system", value<std::string>(&cereal_system)->default_value("none"), "serialization method to test")
         ("message", value<std::string>(), "message type to test")
         ("sgasize", value<uint32_t>(&sga_size)->default_value(1), "Number of buffers in sga")
@@ -117,6 +119,10 @@ void parse_args(int argc, char **argv, bool server)
 
     if (vm.count("file")) {
         file = vm["file"].as<std::string>();
+    }
+
+    if (vm.count("latlog")) {
+        latency_log = vm["latlog"].as<std::string>();
     }
 
     if (vm.count("system")) {
