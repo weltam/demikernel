@@ -1,6 +1,6 @@
 use crate::{
     fail::Fail,
-    sync::Bytes,
+    runtime::PacketBuf,
 };
 use byteorder::{
     ByteOrder,
@@ -108,13 +108,15 @@ impl Ipv4Header {
         IPV4_HEADER2_SIZE
     }
 
-    pub fn parse(buf: Bytes) -> Result<(Self, Bytes), Fail> {
+    pub fn parse(buf: PacketBuf) -> Result<(Self, PacketBuf), Fail> {
         if buf.len() < IPV4_HEADER2_SIZE {
             return Err(Fail::Malformed {
                 details: "Datagram too small",
             });
         }
-        let (hdr_buf, payload_buf) = buf.split(IPV4_HEADER2_SIZE);
+        let hdr_buf: &[u8; IPV4_HEADER2_SIZE] = &buf[..IPV4_HEADER2_SIZE]
+            .try_into()
+            .unwrap();
 
         let version = hdr_buf[0] >> 4;
         if version != IPV4_VERSION {
@@ -139,7 +141,7 @@ impl Ipv4Header {
         let ecn = hdr_buf[1] & 3;
 
         let total_length = NetworkEndian::read_u16(&hdr_buf[2..4]);
-        if total_length as usize != IPV4_HEADER2_SIZE + payload_buf.len() {
+        if total_length as usize != buf.len() {
             return Err(Fail::Malformed {
                 details: "IPv4 TOTALLEN mismatch",
             });
@@ -184,6 +186,7 @@ impl Ipv4Header {
             src_addr,
             dst_addr,
         };
+        let payload_buf = buf.split(IPV4_HEADER2_SIZE);
         Ok((header, payload_buf))
     }
 

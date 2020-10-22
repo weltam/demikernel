@@ -28,7 +28,7 @@ use crate::{
             UdpOperation,
         },
     },
-    runtime::Runtime,
+    runtime::{PacketBuf, Runtime},
     scheduler::Operation,
     sync::Bytes,
 };
@@ -74,7 +74,7 @@ impl<RT: Runtime> Engine<RT> {
         &self.rt
     }
 
-    pub fn receive(&mut self, bytes: Bytes) -> Result<(), Fail> {
+    pub fn receive(&mut self, bytes: PacketBuf) -> Result<(), Fail> {
         let _s = static_span!();
         let (header, payload) = Ethernet2Header::parse(bytes)?;
         if self.rt.local_link_addr() != header.dst_addr && !header.dst_addr.is_broadcast() {
@@ -147,9 +147,9 @@ impl<RT: Runtime> Engine<RT> {
         }
     }
 
-    pub fn push(&mut self, fd: FileDescriptor, buf: Bytes) -> Operation<RT> {
+    pub fn push(&mut self, fd: FileDescriptor, buf: PacketBuf) -> Operation<RT> {
         match self.file_table.get(fd) {
-            Some(File::TcpSocket) => Operation::from(self.ipv4.tcp.push(fd, buf)),
+            Some(File::TcpSocket) => Operation::from(self.ipv4.tcp.push(fd, todo!())),
             Some(File::UdpSocket) => {
                 let udp_op = UdpOperation::Push(fd, self.ipv4.udp.push(fd, buf));
                 Operation::Udp(udp_op)
@@ -158,7 +158,7 @@ impl<RT: Runtime> Engine<RT> {
         }
     }
 
-    pub fn udp_push(&mut self, fd: FileDescriptor, buf: Bytes) -> Result<(), Fail> {
+    pub fn udp_push(&mut self, fd: FileDescriptor, buf: PacketBuf) -> Result<(), Fail> {
         self.ipv4.udp.push(fd, buf)
     }
 

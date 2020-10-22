@@ -14,7 +14,7 @@ use crate::{
         },
         tcp::SeqNumber,
     },
-    runtime::PacketBuf,
+    runtime::PacketSerialize,
     sync::Bytes,
 };
 use byteorder::{
@@ -43,7 +43,7 @@ pub struct TcpSegment {
     pub data: Bytes,
 }
 
-impl PacketBuf for TcpSegment {
+impl PacketSerialize for TcpSegment {
     fn compute_size(&self) -> usize {
         let size = self.ethernet2_hdr.compute_size()
             + self.ipv4_hdr.compute_size()

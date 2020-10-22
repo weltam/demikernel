@@ -9,7 +9,7 @@ use crate::{
         },
         ipv4::datagram::Ipv4Header,
     },
-    runtime::PacketBuf,
+    runtime::PacketSerialize,
     sync::Bytes,
 };
 use byteorder::{
@@ -93,7 +93,7 @@ pub struct Icmpv4Message {
     // TODO: Add a body enum when we need it.
 }
 
-impl PacketBuf for Icmpv4Message {
+impl PacketSerialize for Icmpv4Message {
     fn compute_size(&self) -> usize {
         let size = self.ethernet2_hdr.compute_size()
             + self.ipv4_hdr.compute_size()

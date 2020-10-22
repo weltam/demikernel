@@ -1,5 +1,6 @@
 #![feature(const_fn, const_panic, const_alloc_layout)]
 #![feature(const_mut_refs, const_type_name)]
+#![feature(new_uninit)]
 
 use tracy_client::static_span;
 use catnip::{
@@ -16,17 +17,15 @@ use catnip::{
         tcp,
     },
     runtime::{
-        PacketBuf,
+        PKTBUF_SIZE,
+        PacketSerialize,
         Runtime,
+        PacketBuf,
     },
     scheduler::{
         Operation,
         Scheduler,
         SchedulerHandle,
-    },
-    sync::{
-        Bytes,
-        BytesMut,
     },
     test_helpers::{
         ALICE_IPV4,
@@ -76,8 +75,8 @@ impl TestRuntime {
         now: Instant,
         link_addr: MacAddress,
         ipv4_addr: Ipv4Addr,
-        incoming: crossbeam_channel::Receiver<Bytes>,
-        outgoing: crossbeam_channel::Sender<Bytes>,
+        incoming: crossbeam_channel::Receiver<PacketBuf>,
+        outgoing: crossbeam_channel::Sender<PacketBuf>,
     ) -> Self {
         let mut arp_options = arp::Options::default();
         arp_options.retry_count = 2;
@@ -86,7 +85,7 @@ impl TestRuntime {
         arp_options.initial_values.insert(ALICE_IPV4, ALICE_MAC);
         arp_options.initial_values.insert(BOB_IPV4, BOB_MAC);
 
-        let inner = Inner {
+        let mut inner = Inner {
             timer: TimerRc(Rc::new(Timer::new(now))),
             rng: SmallRng::from_seed([0; 16]),
             incoming,
@@ -95,7 +94,13 @@ impl TestRuntime {
             ipv4_addr,
             tcp_options: tcp::Options::default(),
             arp_options,
+            pktbufs: vec![],
         };
+
+        for i in 0..16 {
+            inner.pktbufs.push(unsafe { Box::new_zeroed().assume_init() });
+        }
+
         Self {
             inner: Rc::new(RefCell::new(inner)),
             scheduler: Scheduler::new(),
@@ -106,31 +111,29 @@ impl TestRuntime {
 struct Inner {
     timer: TimerRc,
     rng: SmallRng,
-    incoming: crossbeam_channel::Receiver<Bytes>,
-    outgoing: crossbeam_channel::Sender<Bytes>,
+    incoming: crossbeam_channel::Receiver<PacketBuf>,
+    outgoing: crossbeam_channel::Sender<PacketBuf>,
 
     link_addr: MacAddress,
     ipv4_addr: Ipv4Addr,
     tcp_options: tcp::Options,
     arp_options: arp::Options,
+    pktbufs: Vec<Box<[u8; PKTBUF_SIZE]>>,
 }
 
 impl Runtime for TestRuntime {
     type WaitFuture = catnip::timer::WaitFuture<TimerRc>;
 
-    fn transmit(&self, pkt: impl PacketBuf) {
+    fn transmit(&self, pkt: impl PacketSerialize) {
         let _s = static_span!();
-        let size = pkt.compute_size();
-        let mut buf = BytesMut::zeroed(size);
-        pkt.serialize(&mut buf[..]);
         self.inner
             .borrow_mut()
             .outgoing
-            .try_send(buf.freeze())
+            .try_send(pkt.serialize2())
             .unwrap();
     }
 
-    fn receive(&self) -> Option<Bytes> {
+    fn receive(&self) -> Option<PacketBuf> {
         let _s = static_span!();
         self.inner.borrow_mut().incoming.try_recv().ok()
     }
@@ -189,6 +192,19 @@ impl Runtime for TestRuntime {
         self.scheduler
             .insert(Operation::Background(future.boxed_local()))
     }
+
+    fn alloc_pktbuf(&self) -> PacketBuf {
+        let mut inner = self.inner.borrow_mut();
+        let buf = inner.pktbufs.pop().unwrap_or_else(|| panic!("All allocations empty"));
+        PacketBuf::new(buf)
+    }
+
+    fn free_pktbuf(&self, buf: PacketBuf) {
+        if let Some(b) = buf.into_buf() {
+            let mut inner = self.inner.borrow_mut();
+            inner.pktbufs.push(b);
+        }
+    }
 }
 
 #[test]
@@ -218,29 +234,33 @@ fn udp_echo() {
         let qt = alice.connect(alice_fd, bob_addr);
         assert_eq!(alice.wait(qt).qr_opcode, dmtr_opcode_t::DMTR_OPC_CONNECT);
 
-        let sga = dmtr_sgarray_t::from(&vec![fill_char; size][..]);
+        let pktbuf = alice.rt().alloc_pktbuf();
+        let data_start = 14 + 20 + 8;
+        let mut pktbuf = pktbuf.split(data_start).trim(size);
+        &pktbuf[..].copy_from_slice(&vec![fill_char; size]);
+        let mut sga = dmtr_sgarray_t::from(pktbuf);
 
         let mut samples = Vec::with_capacity(num_iters);
 
         for _ in 0..num_iters {
             let start = Instant::now();
 
-            let qt = alice.push(alice_fd, &sga);
+            let qt = alice.push(alice_fd, sga);
             assert_eq!(alice.wait(qt).qr_opcode, dmtr_opcode_t::DMTR_OPC_PUSH);
 
             let qt = alice.pop(alice_fd);
             let qr = alice.wait(qt);
             assert_eq!(qr.qr_opcode, dmtr_opcode_t::DMTR_OPC_POP);
 
-            let sga = unsafe { qr.qr_value.sga };
-            assert_eq!(sga.sga_numsegs, 1);
-            assert_eq!(sga.sga_segs[0].sgaseg_len, size as u32);
-            sga.free();
+            let recv_sga = unsafe { qr.qr_value.sga };
+            assert_eq!(recv_sga.sga_numsegs, 1);
+            assert_eq!(recv_sga.sga_segs[0].sgaseg_len, size as u32);
+            sga = recv_sga;
 
             samples.push(start.elapsed());
         }
 
-        sga.free();
+        alice.rt().free_pktbuf(sga.into());
         done_tx.send(samples).unwrap();
     });
 
@@ -262,9 +282,8 @@ fn udp_echo() {
             assert_eq!(sga.sga_numsegs, 1);
             assert_eq!(sga.sga_segs[0].sgaseg_len, size as u32);
 
-            let qt = bob.push(bob_fd, &sga);
+            let qt = bob.push(bob_fd, sga);
             assert_eq!(bob.wait(qt).qr_opcode, dmtr_opcode_t::DMTR_OPC_PUSH);
-            sga.free();
         }
     });
 

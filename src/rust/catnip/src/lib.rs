@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 #![feature(allocator_api)]
+#![feature(core_intrinsics)]
 #![feature(alloc_layout_extra)]
 #![feature(const_fn, const_panic, const_alloc_layout)]
 #![feature(const_mut_refs, const_type_name)]

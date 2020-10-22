@@ -18,9 +18,8 @@ use crate::{
         },
         MacAddress,
     },
-    runtime::Runtime,
+    runtime::{PacketBuf, Runtime},
     scheduler::SchedulerHandle,
-    sync::Bytes,
 };
 use futures::FutureExt;
 use hashbrown::HashMap;
@@ -72,15 +71,16 @@ impl<RT: Runtime> ArpPeer<RT> {
         }
     }
 
-    pub fn receive(&mut self, buf: Bytes) -> Result<(), Fail> {
+    pub fn receive(&mut self, buf: PacketBuf) -> Result<(), Fail> {
         // from RFC 826:
         // > ?Do I have the hardware type in ar$hrd?
         // > [optionally check the hardware length ar$hln]
         // > ?Do I speak the protocol in ar$pro?
         // > [optionally check the protocol length ar$pln]
-        let pdu = ArpPdu::parse(buf)?;
+        let pdu = ArpPdu::parse(&buf)?;
+        self.rt.free_pktbuf(buf);
 
-        // from RFC 826:
+        // from RFC 826:p
         // > Merge_flag := false
         // > If the pair <protocol type, sender protocol address> is
         // > already in my translation table, update the sender

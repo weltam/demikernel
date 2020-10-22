@@ -3,6 +3,7 @@
 use crate::{
     file_table::FileDescriptor,
     operations::OperationResult,
+    runtime::PacketBuf,
 };
 use libc::{
     c_int,
@@ -11,8 +12,6 @@ use libc::{
 };
 use std::{
     mem,
-    ptr,
-    slice,
 };
 
 pub type dmtr_qtoken_t = u64;
@@ -34,16 +33,33 @@ pub struct dmtr_sgarray_t {
     pub sga_addr: sockaddr_in,
 }
 
-impl From<&[u8]> for dmtr_sgarray_t {
-    fn from(bytes: &[u8]) -> Self {
-        let buf: Box<[u8]> = bytes.into();
-        let ptr = Box::into_raw(buf);
+// impl From<&[u8]> for dmtr_sgarray_t {
+//     fn from(bytes: &[u8]) -> Self {
+//         // XXX: Alloc on pop
+//         let buf: Box<[u8]> = bytes.into();
+//         let ptr = Box::into_raw(buf);
+//         let sgaseg = dmtr_sgaseg_t {
+//             sgaseg_buf: ptr as *mut _,
+//             sgaseg_len: bytes.len() as u32,
+//         };
+//         dmtr_sgarray_t {
+//             sga_buf: ptr::null_mut(),
+//             sga_numsegs: 1,
+//             sga_segs: [sgaseg],
+//             sga_addr: unsafe { mem::zeroed() },
+//         }
+//     }
+// }
+
+impl From<PacketBuf> for dmtr_sgarray_t {
+    fn from(mut buf: PacketBuf) -> Self {
+        let slice = &mut buf[..];
         let sgaseg = dmtr_sgaseg_t {
-            sgaseg_buf: ptr as *mut _,
-            sgaseg_len: bytes.len() as u32,
+            sgaseg_buf: slice.as_mut_ptr() as *mut _,
+            sgaseg_len: slice.len() as u32,
         };
         dmtr_sgarray_t {
-            sga_buf: ptr::null_mut(),
+            sga_buf: buf.into_raw(),
             sga_numsegs: 1,
             sga_segs: [sgaseg],
             sga_addr: unsafe { mem::zeroed() },
@@ -51,18 +67,14 @@ impl From<&[u8]> for dmtr_sgarray_t {
     }
 }
 
-impl dmtr_sgarray_t {
-    pub fn free(self) {
-        for i in 0..self.sga_numsegs as usize {
-            let seg = &self.sga_segs[i];
-            let allocation: Box<[u8]> = unsafe {
-                Box::from_raw(slice::from_raw_parts_mut(
-                    seg.sgaseg_buf as *mut _,
-                    seg.sgaseg_len as usize,
-                ))
-            };
-            drop(allocation);
-        }
+impl From<dmtr_sgarray_t> for PacketBuf {
+    fn from(arr: dmtr_sgarray_t) -> Self {
+        assert_eq!(arr.sga_numsegs, 1);
+        PacketBuf::from_raw(
+            arr.sga_buf,
+            arr.sga_segs[0].sgaseg_buf,
+            arr.sga_segs[0].sgaseg_len as usize,
+        )
     }
 }
 
@@ -127,8 +139,8 @@ impl dmtr_qresult_t {
                 qr_qt: qt,
                 qr_value: unsafe { mem::zeroed() },
             },
-            OperationResult::Pop(bytes) => {
-                let sga = dmtr_sgarray_t::from(&bytes[..]);
+            OperationResult::Pop(packet_buf) => {
+                let sga = packet_buf.into();
                 let qr_value = dmtr_qr_value_t { sga };
                 Self {
                     qr_opcode: dmtr_opcode_t::DMTR_OPC_POP,

@@ -12,16 +12,13 @@ use catnip::{
     },
     runtime::{
         PacketBuf,
+        PacketSerialize,
         Runtime,
     },
     scheduler::{
         Operation,
         Scheduler,
         SchedulerHandle,
-    },
-    sync::{
-        Bytes,
-        BytesMut,
     },
     timer::{
         Timer,
@@ -99,12 +96,12 @@ impl DPDKRuntime {
         let rng = SmallRng::from_rng(&mut rng).expect("Failed to initialize RNG");
         let now = Instant::now();
 
-        let mut buffered: MaybeUninit<[Bytes; MAX_QUEUE_DEPTH]> = MaybeUninit::uninit();
+        let mut buffered: MaybeUninit<[PacketBuf; MAX_QUEUE_DEPTH]> = MaybeUninit::uninit();
         for i in 0..MAX_QUEUE_DEPTH {
             unsafe {
-                (buffered.as_mut_ptr() as *mut Bytes)
+                (buffered.as_mut_ptr() as *mut PacketBuf)
                     .offset(i as isize)
-                    .write(Bytes::empty())
+                    .write(PacketBuf::empty())
             };
         }
         let inner = Inner {
@@ -120,7 +117,12 @@ impl DPDKRuntime {
 
             num_buffered: 0,
             buffered: unsafe { buffered.assume_init() },
+            pktbufs: vec![],
         };
+        for _ in 0..16 {
+            pktbufs.push(unsafe { Box::new_zeroed().assume_init() });
+        }
+
         Self {
             inner: Rc::new(RefCell::new(inner)),
             scheduler: Scheduler::new(),
@@ -140,13 +142,17 @@ struct Inner {
     dpdk_mempool: *mut rte_mempool,
 
     num_buffered: usize,
-    buffered: [Bytes; MAX_QUEUE_DEPTH],
+    buffered: [PacketBuf; MAX_QUEUE_DEPTH],
+
+    pktbufs: Vec<Box<[u8; PKTBUF_SIZE]>>,
 }
 
 impl Runtime for DPDKRuntime {
     type WaitFuture = WaitFuture<TimerRc>;
 
-    fn transmit(&self, buf: impl PacketBuf) {
+    fn transmit(&self, buf: PacketSerialize) {
+        let pktbuf = buf.serialize2();
+
         let pool = { self.inner.borrow().dpdk_mempool };
         let dpdk_port_id = { self.inner.borrow().dpdk_port_id };
         let mut pkt = unsafe { catnip_libos_alloc_pkt(pool) };
@@ -172,13 +178,13 @@ impl Runtime for DPDKRuntime {
         assert_eq!(num_sent, 1);
     }
 
-    fn receive(&self) -> Option<Bytes> {
+    fn receive(&self) -> Option<PacketBuf> {
         let mut inner = self.inner.borrow_mut();
         loop {
             if inner.num_buffered > 0 {
                 inner.num_buffered -= 1;
                 let ix = inner.num_buffered;
-                return Some(mem::replace(&mut inner.buffered[ix], Bytes::empty()));
+                return Some(mem::replace(&mut inner.buffered[ix], PacketBuf::empty()));
             }
 
             let dpdk_port = inner.dpdk_port_id;
@@ -209,8 +215,12 @@ impl Runtime for DPDKRuntime {
                 };
 
                 let data = unsafe { slice::from_raw_parts(p, (*packet).data_len as usize) };
+                let mut pktbuf = PacketBuf::new(inner.pktbufs.pop().expect("Ran out of pktbufs"));
+                pktbuf.trim(data.len());
+                pktbuf[..].copy_from_slice(data);
+
                 let ix = inner.num_buffered;
-                inner.buffered[ix] = BytesMut::from(data).freeze();
+                inner.buffered[ix] = pktbuf;
                 inner.num_buffered += 1;
 
                 unsafe { catnip_libos_free_pkt(packet as *const _ as *mut _) };
@@ -271,5 +281,19 @@ impl Runtime for DPDKRuntime {
 
     fn scheduler(&self) -> &Scheduler<Operation<Self>> {
         &self.scheduler
+    }
+
+    fn alloc_pktbuf(&self) -> PacketBuf {
+        let mut inner = self.inner.borrow_mut();
+        let buf = inner.pktbufs.pop().expect("Out of packetbufs");
+        PacketBuf::new(buf)
+    }
+
+    fn free_pktbuf(&self, buf: PacketBuf) {
+        let mut inner = self.inner.borrow_mut();
+        if let Some(b) = buf.into_buf() {
+            let mut inner = self.inner.borrow_mut();
+            inner.pktbufs.push(b);
+        }
     }
 }

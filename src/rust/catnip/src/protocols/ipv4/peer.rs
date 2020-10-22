@@ -16,8 +16,7 @@ use crate::{
         tcp,
         udp,
     },
-    runtime::Runtime,
-    sync::Bytes,
+    runtime::{PacketBuf, Runtime},
 };
 use std::{
     future::Future,
@@ -45,14 +44,14 @@ impl<RT: Runtime> Ipv4Peer<RT> {
         }
     }
 
-    pub fn receive(&mut self, buf: Bytes) -> Result<(), Fail> {
+    pub fn receive(&mut self, buf: PacketBuf) -> Result<(), Fail> {
         let (header, payload) = Ipv4Header::parse(buf)?;
         if header.dst_addr != self.rt.local_ipv4_addr() && !header.dst_addr.is_broadcast() {
             return Err(Fail::Misdelivered {});
         }
         match header.protocol {
-            Ipv4Protocol2::Icmpv4 => self.icmpv4.receive(&header, payload),
-            Ipv4Protocol2::Tcp => self.tcp.receive(&header, payload),
+            Ipv4Protocol2::Icmpv4 => self.icmpv4.receive(&header, todo!()),
+            Ipv4Protocol2::Tcp => self.tcp.receive(&header, todo!()),
             Ipv4Protocol2::Udp => self.udp.receive(&header, payload),
         }
     }

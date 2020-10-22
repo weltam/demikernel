@@ -10,8 +10,7 @@ use crate::{
         },
         MacAddress,
     },
-    runtime::PacketBuf,
-    sync::Bytes,
+    runtime::{PacketBuf, PacketSerialize},
 };
 use byteorder::{
     ByteOrder,
@@ -57,7 +56,7 @@ pub struct ArpMessage {
     pub arp_pdu: ArpPdu,
 }
 
-impl PacketBuf for ArpMessage {
+impl PacketSerialize for ArpMessage {
     fn compute_size(&self) -> usize {
         let size = self.ethernet2_hdr.compute_size() + self.arp_pdu.compute_size();
         cmp::max(size, MIN_PAYLOAD_SIZE)
@@ -88,7 +87,7 @@ impl ArpPdu {
         ARP_MESSAGE_SIZE
     }
 
-    pub fn parse(buf: Bytes) -> Result<Self, Fail> {
+    pub fn parse(buf: &PacketBuf) -> Result<Self, Fail> {
         if buf.len() < ARP_MESSAGE_SIZE {
             return Err(Fail::Malformed {
                 details: "ARP message too short",

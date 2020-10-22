@@ -9,8 +9,7 @@ use crate::{
         OperationResult,
         ResultFuture,
     },
-    runtime::Runtime,
-    sync::Bytes,
+    runtime::{PacketBuf, Runtime},
 };
 use std::{
     cell::RefCell,
@@ -204,7 +203,7 @@ impl<RT: Runtime> fmt::Debug for PopFuture<RT> {
 }
 
 impl<RT: Runtime> Future for PopFuture<RT> {
-    type Output = Result<Bytes, Fail>;
+    type Output = Result<PacketBuf, Fail>;
 
     fn poll(self: Pin<&mut Self>, ctx: &mut Context) -> Poll<Self::Output> {
         let self_ = self.get_mut();

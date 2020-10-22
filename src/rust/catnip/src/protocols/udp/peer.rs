@@ -28,9 +28,8 @@ use crate::{
             Ipv4Protocol2,
         },
     },
-    runtime::Runtime,
+    runtime::{Runtime, PacketBuf},
     scheduler::SchedulerHandle,
-    sync::Bytes,
 };
 use futures_intrusive::{
     buffer::GrowingHeapBuf,
@@ -60,7 +59,7 @@ pub struct UdpPeer<RT: Runtime> {
 }
 
 struct Listener {
-    buf: VecDeque<(Option<ipv4::Endpoint>, Bytes)>,
+    buf: VecDeque<(Option<ipv4::Endpoint>, PacketBuf)>,
     waker: Option<Waker>,
 }
 
@@ -72,7 +71,7 @@ struct Socket {
     remote: Option<ipv4::Endpoint>,
 }
 
-type OutgoingReq = (Option<ipv4::Endpoint>, ipv4::Endpoint, Bytes);
+type OutgoingReq = (Option<ipv4::Endpoint>, ipv4::Endpoint, PacketBuf);
 type OutgoingSender = GenericSender<NoopLock, OutgoingReq, GrowingHeapBuf<OutgoingReq>>;
 type OutgoingReceiver = GenericReceiver<NoopLock, OutgoingReq, GrowingHeapBuf<OutgoingReq>>;
 
@@ -197,7 +196,7 @@ impl<RT: Runtime> UdpPeer<RT> {
         }
     }
 
-    pub fn receive(&self, ipv4_header: &Ipv4Header, buf: Bytes) -> Result<(), Fail> {
+    pub fn receive(&self, ipv4_header: &Ipv4Header, buf: PacketBuf) -> Result<(), Fail> {
         let (hdr, data) = UdpHeader::parse(ipv4_header, buf)?;
         let local = ipv4::Endpoint::new(ipv4_header.dst_addr, hdr.dst_port);
         let remote = hdr
@@ -215,7 +214,7 @@ impl<RT: Runtime> UdpPeer<RT> {
         Ok(())
     }
 
-    pub fn push(&self, fd: FileDescriptor, buf: Bytes) -> Result<(), Fail> {
+    pub fn push(&self, fd: FileDescriptor, buf: PacketBuf) -> Result<(), Fail> {
         let inner = self.inner.borrow();
         let (local, remote) = match inner.sockets.get(&fd) {
             Some(Socket {
@@ -294,7 +293,7 @@ pub struct PopFuture {
 }
 
 impl Future for PopFuture {
-    type Output = Result<Bytes, Fail>;
+    type Output = Result<PacketBuf, Fail>;
 
     fn poll(self: Pin<&mut Self>, ctx: &mut Context) -> Poll<Self::Output> {
         let self_ = self.get_mut();
@@ -345,8 +344,8 @@ impl UdpOperation {
 
             UdpOperation::Pop(ResultFuture {
                 future,
-                done: Some(Ok(bytes)),
-            }) => (future.fd, OperationResult::Pop(bytes)),
+                done: Some(Ok(packet_buf)),
+            }) => (future.fd, OperationResult::Pop(packet_buf)),
             UdpOperation::Pop(ResultFuture {
                 future,
                 done: Some(Err(e)),

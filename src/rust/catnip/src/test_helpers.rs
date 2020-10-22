@@ -9,7 +9,9 @@ use crate::{
         tcp,
     },
     runtime::{
+        PKTBUF_SIZE,
         PacketBuf,
+        PacketSerialize,
         Runtime,
     },
     scheduler::{
@@ -17,17 +19,12 @@ use crate::{
         Scheduler,
         SchedulerHandle,
     },
-    sync::{
-        Bytes,
-        BytesMut,
-    },
     timer::{
         Timer,
         TimerRc,
     },
 };
 use futures::{
-    task::noop_waker_ref,
     FutureExt,
 };
 use rand::{
@@ -45,7 +42,6 @@ use std::{
     future::Future,
     net::Ipv4Addr,
     rc::Rc,
-    task::Context,
     time::{
         Duration,
         Instant,
@@ -93,6 +89,7 @@ impl TestRuntime {
             ipv4_addr,
             tcp_options: tcp::Options::default(),
             arp_options,
+            pktbufs: vec![],
         };
         Self {
             inner: Rc::new(RefCell::new(inner)),
@@ -100,11 +97,11 @@ impl TestRuntime {
         }
     }
 
-    pub fn pop_frame(&self) -> Bytes {
+    pub fn pop_frame(&self) -> PacketBuf {
         self.inner.borrow_mut().outgoing.pop_front().unwrap()
     }
 
-    pub fn push_frame(&self, buf: Bytes) {
+    pub fn push_frame(&self, buf: PacketBuf) {
         self.inner.borrow_mut().incoming.push_back(buf);
     }
 
@@ -119,27 +116,27 @@ struct Inner {
     name: &'static str,
     timer: TimerRc,
     rng: SmallRng,
-    incoming: VecDeque<Bytes>,
-    outgoing: VecDeque<Bytes>,
+    incoming: VecDeque<PacketBuf>,
+    outgoing: VecDeque<PacketBuf>,
 
     link_addr: MacAddress,
     ipv4_addr: Ipv4Addr,
     tcp_options: tcp::Options,
     arp_options: arp::Options,
+
+    pktbufs: Vec<Box<[u8; PKTBUF_SIZE]>>,
 }
 
 impl Runtime for TestRuntime {
     type WaitFuture = crate::timer::WaitFuture<TimerRc>;
 
-    fn transmit(&self, pkt: impl PacketBuf) {
-        let size = pkt.compute_size();
-        let mut buf = BytesMut::zeroed(size);
-        pkt.serialize(&mut buf[..]);
-        self.inner.borrow_mut().outgoing.push_back(buf.freeze());
+    fn transmit(&self, pkt: impl PacketSerialize) {
+        self.inner.borrow_mut().outgoing.push_back(pkt.serialize2());
     }
 
-    fn receive(&self) -> Option<Bytes> {
-        self.inner.borrow_mut().incoming.pop_front()
+    fn receive(&self) -> Option<PacketBuf> {
+        self.inner.borrow_mut().incoming.pop_front();
+        todo!()
     }
 
     fn scheduler(&self) -> &Scheduler<Operation<Self>> {
@@ -195,6 +192,20 @@ impl Runtime for TestRuntime {
     fn spawn<F: Future<Output = ()> + 'static>(&self, future: F) -> SchedulerHandle {
         self.scheduler
             .insert(Operation::Background(future.boxed_local()))
+    }
+
+    fn alloc_pktbuf(&self) -> PacketBuf {
+        let mut inner = self.inner.borrow_mut();
+        let buf = inner.pktbufs.pop().unwrap_or_else(|| unsafe { Box::new_zeroed().assume_init() });
+        PacketBuf::new(buf)
+    }
+
+    fn free_pktbuf(&self, buf: PacketBuf) {
+        let mut inner = self.inner.borrow_mut();
+        if let Some(b) = buf.into_buf() {
+            let mut inner = self.inner.borrow_mut();
+            inner.pktbufs.push(b);
+        }
     }
 }
 

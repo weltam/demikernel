@@ -38,7 +38,7 @@ use crate::{
             },
         },
     },
-    runtime::Runtime,
+    runtime::{PacketBuf, Runtime},
     sync::Bytes,
 };
 use hashbrown::HashMap;
@@ -248,7 +248,7 @@ impl<RT: Runtime> Peer<RT> {
         }
     }
 
-    pub fn poll_recv(&self, fd: FileDescriptor, ctx: &mut Context) -> Poll<Result<Bytes, Fail>> {
+    pub fn poll_recv(&self, fd: FileDescriptor, ctx: &mut Context) -> Poll<Result<PacketBuf, Fail>> {
         let inner = self.inner.borrow_mut();
         let key = match inner.sockets.get(&fd) {
             Some(Socket::Established { local, remote }) => (*local, *remote),
@@ -264,7 +264,8 @@ impl<RT: Runtime> Peer<RT> {
             None => Poll::Ready(Err(Fail::Malformed {
                 details: "Socket not established",
             })),
-        }
+        };
+        todo!()
     }
 
     pub fn push(&self, fd: FileDescriptor, buf: Bytes) -> PushFuture<RT> {

@@ -1,7 +1,7 @@
 use crate::{
     fail::Fail,
     file_table::FileDescriptor,
-    sync::Bytes,
+    runtime::PacketBuf,
 };
 use std::{
     future::Future,
@@ -47,6 +47,6 @@ pub enum OperationResult {
     Connect,
     Accept(FileDescriptor),
     Push,
-    Pop(Bytes),
+    Pop(PacketBuf),
     Failed(Fail),
 }

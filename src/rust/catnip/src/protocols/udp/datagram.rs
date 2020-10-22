@@ -11,8 +11,7 @@ use crate::{
             Ipv4Protocol2,
         },
     },
-    runtime::PacketBuf,
-    sync::Bytes,
+    runtime::{PacketBuf, PacketSerialize},
 };
 use byteorder::{
     ByteOrder,
@@ -40,10 +39,10 @@ pub struct UdpDatagram {
     pub ethernet2_hdr: Ethernet2Header,
     pub ipv4_hdr: Ipv4Header,
     pub udp_hdr: UdpHeader,
-    pub data: Bytes,
+    pub data: PacketBuf,
 }
 
-impl PacketBuf for UdpDatagram {
+impl PacketSerialize for UdpDatagram {
     fn compute_size(&self) -> usize {
         let size = self.ethernet2_hdr.compute_size()
             + self.ipv4_hdr.compute_size()
@@ -86,6 +85,50 @@ impl PacketBuf for UdpDatagram {
             *byte = 0;
         }
     }
+
+    fn serialize2(self) -> PacketBuf {
+        let eth_hdr_size = self.ethernet2_hdr.compute_size();
+        let ipv4_hdr_size = self.ipv4_hdr.compute_size();
+        let udp_hdr_size = self.udp_hdr.compute_size();
+        let data_len = self.data.len();
+
+        let hdr_size = eth_hdr_size + ipv4_hdr_size + udp_hdr_size;
+
+        let mut buf = self.data.unsplit_left(hdr_size)
+            .expect("TODO: Handle too small allocations");
+        let (hdr_buf, data_buf) = buf[..].split_at_mut(hdr_size);
+
+        let mut cur_pos = 0;
+        self.ethernet2_hdr
+            .serialize(&mut hdr_buf[cur_pos..(cur_pos + eth_hdr_size)]);
+        cur_pos += eth_hdr_size;
+
+        let ipv4_payload_len = udp_hdr_size + data_len;
+        self.ipv4_hdr.serialize(
+            &mut hdr_buf[cur_pos..(cur_pos + ipv4_hdr_size)],
+            ipv4_payload_len,
+        );
+        cur_pos += ipv4_hdr_size;
+
+        self.udp_hdr.serialize(
+            &mut hdr_buf[cur_pos..(cur_pos + udp_hdr_size)],
+            &self.ipv4_hdr,
+            data_buf,
+        );
+        cur_pos += udp_hdr_size;
+
+        // Add Ethernet padding if needed.
+        let buf_len = buf.len();
+        if buf_len < MIN_PAYLOAD_SIZE {
+            buf = buf.unsplit_right(MIN_PAYLOAD_SIZE - buf_len)
+                .expect("TODO: Handle too small allocations");
+            for byte in &mut buf[cur_pos..] {
+                *byte = 0;
+            }
+        }
+
+        buf
+    }
 }
 
 impl UdpHeader {
@@ -93,32 +136,33 @@ impl UdpHeader {
         UDP_HEADER2_SIZE
     }
 
-    pub fn parse(ipv4_header: &Ipv4Header, buf: Bytes) -> Result<(Self, Bytes), Fail> {
+    pub fn parse(ipv4_header: &Ipv4Header, buf: PacketBuf) -> Result<(Self, PacketBuf), Fail> {
         if buf.len() < UDP_HEADER2_SIZE {
             return Err(Fail::Malformed {
                 details: "UDP segment too small",
             });
         }
-        let (hdr_buf, data_buf) = buf.split(UDP_HEADER2_SIZE);
+        let hdr_buf: &[u8; UDP_HEADER2_SIZE] = buf[..UDP_HEADER2_SIZE].try_into().unwrap();
 
         let src_port = ip::Port::try_from(NetworkEndian::read_u16(&hdr_buf[0..2])).ok();
         let dst_port = ip::Port::try_from(NetworkEndian::read_u16(&hdr_buf[2..4]))?;
 
         let length = NetworkEndian::read_u16(&hdr_buf[4..6]) as usize;
-        if length != hdr_buf.len() + data_buf.len() {
+        if length != buf.len() {
             return Err(Fail::Malformed {
                 details: "UDP length mismatch",
             });
         }
 
         let checksum = NetworkEndian::read_u16(&hdr_buf[6..8]);
-        if checksum != 0 && checksum != udp_checksum(&ipv4_header, &hdr_buf[..], &data_buf[..]) {
+        if checksum != 0 && checksum != udp_checksum(&ipv4_header, &hdr_buf[..], &buf[UDP_HEADER2_SIZE..]) {
             return Err(Fail::Malformed {
                 details: "UDP checksum mismatch",
             });
         }
 
         let header = Self { src_port, dst_port };
+        let data_buf = buf.split(UDP_HEADER2_SIZE);
         Ok((header, data_buf))
     }
 

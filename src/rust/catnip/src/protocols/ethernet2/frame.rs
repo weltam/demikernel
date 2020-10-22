@@ -1,7 +1,7 @@
 use crate::{
     fail::Fail,
     protocols::ethernet2::MacAddress,
-    sync::Bytes,
+    runtime::PacketBuf,
 };
 use byteorder::{
     ByteOrder,
@@ -51,17 +51,21 @@ impl Ethernet2Header {
         ETHERNET2_HEADER2_SIZE
     }
 
-    pub fn parse(buf: Bytes) -> Result<(Self, Bytes), Fail> {
+    pub fn parse(buf: PacketBuf) -> Result<(Self, PacketBuf), Fail> {
         if buf.len() < ETHERNET2_HEADER2_SIZE {
             return Err(Fail::Malformed {
                 details: "Frame too small",
             });
         }
-        let (hdr_buf, payload_buf) = buf.split(ETHERNET2_HEADER2_SIZE);
+        let hdr_buf: &[u8; ETHERNET2_HEADER2_SIZE] = &buf[..ETHERNET2_HEADER2_SIZE]
+            .try_into()
+            .unwrap();
 
         let dst_addr = MacAddress::from_bytes(&hdr_buf[0..6]);
         let src_addr = MacAddress::from_bytes(&hdr_buf[6..12]);
         let ether_type = EtherType2::try_from(NetworkEndian::read_u16(&hdr_buf[12..14]))?;
+
+        let payload_buf = buf.split(ETHERNET2_HEADER2_SIZE);
         let hdr = Self {
             dst_addr,
             src_addr,

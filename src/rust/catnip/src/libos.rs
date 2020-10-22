@@ -10,18 +10,14 @@ use crate::{
         dmtr_sgarray_t,
     },
     protocols::ipv4::Endpoint,
-    runtime::Runtime,
+    runtime::{Runtime, PacketBuf},
     scheduler::{
         Operation,
         SchedulerHandle,
     },
-    sync::BytesMut,
 };
-use futures::task::noop_waker_ref;
 use libc::c_int;
 use std::{
-    slice,
-    task::Context,
     time::Instant,
 };
 use tracy_client::static_span;
@@ -101,24 +97,9 @@ impl<RT: Runtime> LibOS<RT> {
         self.engine.close(fd)
     }
 
-    pub fn push(&mut self, fd: FileDescriptor, sga: &dmtr_sgarray_t) -> QToken {
+    pub fn push(&mut self, fd: FileDescriptor, sga: dmtr_sgarray_t) -> QToken {
         let _s = static_span!();
-        let mut len = 0;
-        for i in 0..sga.sga_numsegs as usize {
-            len += sga.sga_segs[i].sgaseg_len;
-        }
-        let mut buf = BytesMut::zeroed(len as usize);
-        let mut pos = 0;
-        for i in 0..sga.sga_numsegs as usize {
-            let seg = &sga.sga_segs[i];
-            let seg_slice = unsafe {
-                slice::from_raw_parts(seg.sgaseg_buf as *mut u8, seg.sgaseg_len as usize)
-            };
-            buf[pos..(pos + seg_slice.len())].copy_from_slice(seg_slice);
-            pos += seg_slice.len();
-        }
-        let buf = buf.freeze();
-        let future = self.engine.push(fd, buf);
+        let future = self.engine.push(fd, PacketBuf::from(sga));
         self.rt.scheduler().insert(future).into_raw()
     }
 
