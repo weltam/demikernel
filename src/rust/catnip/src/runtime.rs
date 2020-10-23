@@ -37,6 +37,10 @@ pub struct PacketBuf {
 }
 
 impl PacketBuf {
+    pub fn alloc() -> Self {
+        Self::new(unsafe { Box::new_zeroed().assume_init() })
+    }
+
     pub fn new(buf: Box<[u8; PKTBUF_SIZE]>) -> Self {
         PacketBuf { len: buf.len(), buf: Some(buf), offset: 0 }
     }

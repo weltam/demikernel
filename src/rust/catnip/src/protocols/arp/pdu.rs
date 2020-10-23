@@ -80,6 +80,12 @@ impl PacketSerialize for ArpMessage {
             *byte = 0;
         }
     }
+
+    fn serialize2(self) -> PacketBuf {
+        let mut buf = PacketBuf::alloc().trim(self.compute_size());
+        self.serialize(&mut buf[..]);
+        buf
+    }
 }
 
 impl ArpPdu {
