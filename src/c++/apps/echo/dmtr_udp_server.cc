@@ -104,7 +104,7 @@ int main(int argc, char *argv[])
         DMTR_OK(dmtr_record_latency(push_latency, dt.count()));
 
         //fprintf(stderr, "send complete.\n");
-        dmtr_sgafree(&qr.qr_value.sga);
+        // dmtr_sgafree(&qr.qr_value.sga);
     }
 
     return 0;

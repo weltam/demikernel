@@ -50,11 +50,6 @@ int main(int argc, char *argv[])
     listen.sin_family = AF_INET;
     listen.sin_port = htons(12345);
 
-    dmtr_sgarray_t sga = {};
-    sga.sga_numsegs = 1;
-    sga.sga_segs[0].sgaseg_len = packet_size;
-    sga.sga_segs[0].sgaseg_buf = generate_packet();
-
 #if USE_CONNECT
     std::cerr << "Attempting to connect to `" << boost::get(server_ip_addr) << ":" << port << "`..." << std::endl;
     dmtr_qtoken_t qt;
@@ -69,9 +64,15 @@ int main(int argc, char *argv[])
 #endif
 
     for (size_t i = 0; i < iterations; i++) {
+        dmtr_sgarray_t sga2 = dmtr_pktbuf_alloc();
+        sga2.sga_segs[0].sgaseg_buf = &((char*)sga2.sga_buf)[42];
+        sga2.sga_segs[0].sgaseg_len = packet_size;
+        memset(sga2.sga_segs[0].sgaseg_buf, 'a', packet_size);
+        ((char*) sga2.sga_segs[0].sgaseg_buf)[packet_size - 1] = '\0';
+
         dmtr_qtoken_t qt;
         auto t0 = boost::chrono::steady_clock::now();
-        DMTR_OK(dmtr_push(&qt, qd, &sga));
+        DMTR_OK(dmtr_push(&qt, qd, &sga2));
         DMTR_OK(dmtr_wait(&qr, qt));
         //fprintf(stderr, "send complete.\n");
 
@@ -83,9 +84,10 @@ int main(int argc, char *argv[])
         assert(DMTR_OPC_POP == qr.qr_opcode);
         assert(qr.qr_value.sga.sga_numsegs == 1);
         assert(reinterpret_cast<uint8_t *>(qr.qr_value.sga.sga_segs[0].sgaseg_buf)[0] == FILL_CHAR);
+        dmtr_pktbuf_free(qr.qr_value.sga);
 
         //fprintf(stderr, "[%lu] client: rcvd\t%s\tbuf size:\t%d\n", i, reinterpret_cast<char *>(qr.qr_value.sga.sga_segs[0].sgaseg_buf), qr.qr_value.sga.sga_segs[0].sgaseg_len);
-        dmtr_sgafree(&qr.qr_value.sga);
+        // dmtr_sgafree(&qr.qr_value.sga);
     }
 
     DMTR_OK(dmtr_dump_latency(stderr, latency));

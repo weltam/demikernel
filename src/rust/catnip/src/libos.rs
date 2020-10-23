@@ -31,6 +31,7 @@ pub struct LibOS<RT: Runtime> {
     rt: RT,
 
     ts_iters: usize,
+    rt_iters: usize,
 }
 
 impl<RT: Runtime> LibOS<RT> {
@@ -40,6 +41,7 @@ impl<RT: Runtime> LibOS<RT> {
             engine,
             rt,
             ts_iters: 0,
+	    rt_iters: 0,
         })
     }
 
@@ -159,12 +161,17 @@ impl<RT: Runtime> LibOS<RT> {
     fn poll_bg_work(&mut self) {
         let _s = static_span!();
         self.rt.scheduler().poll();
+
+        if self.rt_iters == 0 {
         while let Some(pkt) = self.rt.receive() {
             let pkt = crate::runtime::ManagedPacketBuf::new(self.rt.clone(), pkt);
             if let Err(e) = self.engine.receive(pkt) {
-                warn!("Dropped packet: {:?}", e);
+                eprintln!("Dropped packet: {:?}", e);
             }
         }
+	}
+	self.rt_iters = (self.rt_iters + 1) % 4;
+
         if self.ts_iters == 0 {
             let _t = static_span!("advance_clock");
             self.rt.advance_clock(Instant::now());

@@ -11,6 +11,7 @@ use catnip::{
         tcp,
     },
     runtime::{
+	PKTBUF_SIZE,
         PacketBuf,
         PacketSerialize,
         Runtime,
@@ -104,7 +105,7 @@ impl DPDKRuntime {
                     .write(PacketBuf::empty())
             };
         }
-        let inner = Inner {
+        let mut inner = Inner {
             timer: TimerRc(Rc::new(Timer::new(now))),
             link_addr,
             ipv4_addr,
@@ -120,7 +121,7 @@ impl DPDKRuntime {
             pktbufs: vec![],
         };
         for _ in 0..16 {
-            pktbufs.push(unsafe { Box::new_zeroed().assume_init() });
+            inner.pktbufs.push(unsafe { Box::new_zeroed().assume_init() });
         }
 
         Self {
@@ -150,15 +151,14 @@ struct Inner {
 impl Runtime for DPDKRuntime {
     type WaitFuture = WaitFuture<TimerRc>;
 
-    fn transmit(&self, buf: PacketSerialize) {
-        let pktbuf = buf.serialize2();
-
+    fn transmit(&self, buf: impl PacketSerialize) {
         let pool = { self.inner.borrow().dpdk_mempool };
         let dpdk_port_id = { self.inner.borrow().dpdk_port_id };
         let mut pkt = unsafe { catnip_libos_alloc_pkt(pool) };
         assert!(!pkt.is_null());
 
-        let size = buf.compute_size();
+	let pktbuf = buf.serialize2();
+	let size = pktbuf.len();
 
         let rte_pktmbuf_headroom = 128;
         let buf_len = unsafe { (*pkt).buf_len } - rte_pktmbuf_headroom;
@@ -166,7 +166,8 @@ impl Runtime for DPDKRuntime {
 
         let out_ptr = unsafe { ((*pkt).buf_addr as *mut u8).offset((*pkt).data_off as isize) };
         let out_slice = unsafe { slice::from_raw_parts_mut(out_ptr, buf_len as usize) };
-        buf.serialize(&mut out_slice[..size]);
+	out_slice[..size].copy_from_slice(&pktbuf[..]);
+	self.free_pktbuf(pktbuf);
         let num_sent = unsafe {
             (*pkt).data_len = size as u16;
             (*pkt).pkt_len = size as u32;
@@ -216,7 +217,7 @@ impl Runtime for DPDKRuntime {
 
                 let data = unsafe { slice::from_raw_parts(p, (*packet).data_len as usize) };
                 let mut pktbuf = PacketBuf::new(inner.pktbufs.pop().expect("Ran out of pktbufs"));
-                pktbuf.trim(data.len());
+                pktbuf = pktbuf.trim(data.len());
                 pktbuf[..].copy_from_slice(data);
 
                 let ix = inner.num_buffered;
@@ -290,7 +291,6 @@ impl Runtime for DPDKRuntime {
     }
 
     fn free_pktbuf(&self, buf: PacketBuf) {
-        let mut inner = self.inner.borrow_mut();
         if let Some(b) = buf.into_buf() {
             let mut inner = self.inner.borrow_mut();
             inner.pktbufs.push(b);

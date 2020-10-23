@@ -1,7 +1,7 @@
 #![allow(non_camel_case_types, unused)]
 #![feature(maybe_uninit_uninit_array)]
 #![feature(try_blocks)]
-#![feature(maybe_uninit)]
+#![feature(maybe_uninit, new_uninit)]
 
 use catnip::{
     file_table::FileDescriptor,
@@ -275,7 +275,7 @@ pub extern "C" fn dmtr_push(
     if sga.is_null() {
         return libc::EINVAL;
     }
-    let sga = unsafe { &*sga };
+    let sga = unsafe { *sga };
     with_libos(|libos| {
         unsafe { *qtok_out = libos.push(qd as FileDescriptor, sga) };
         0
@@ -333,6 +333,16 @@ pub extern "C" fn dmtr_wait_any(
         }
         0
     })
+}
+
+#[no_mangle]
+pub extern "C" fn dmtr_pktbuf_alloc() -> dmtr_sgarray_t {
+    with_libos(|libos| libos.rt().alloc_pktbuf().into())
+}
+
+#[no_mangle]
+pub extern "C" fn dmtr_pktbuf_free(a: dmtr_sgarray_t) {
+    with_libos(move |libos| libos.rt().free_pktbuf(a.into()))
 }
 
 #[no_mangle]

@@ -44,7 +44,10 @@ DMTR_EXPORT int dmtr_poll(dmtr_qresult_t *qr_out, dmtr_qtoken_t qt);
 DMTR_EXPORT int dmtr_drop(dmtr_qtoken_t qt);
 
 DMTR_EXPORT int dmtr_sgafree(dmtr_sgarray_t *sga);
-  
+
+DMTR_EXPORT dmtr_sgarray_t dmtr_pktbuf_alloc();                                                                                                                 
+DMTR_EXPORT void dmtr_pktbuf_free(dmtr_sgarray_t);
+
 #ifdef __cplusplus
 }
 #endif
