@@ -58,8 +58,8 @@ pub struct UdpPeer<RT: Runtime> {
     inner: Rc<RefCell<Inner<RT>>>,
 }
 
-struct Listener {
-    buf: VecDeque<(Option<ipv4::Endpoint>, PacketBuf)>,
+struct Listener<RT: Runtime> {
+    buf: VecDeque<(Option<ipv4::Endpoint>, ManagedPacketBuf<RT>)>,
     waker: Option<Waker>,
 }
 
@@ -83,7 +83,7 @@ struct Inner<RT: Runtime> {
     file_table: FileTable,
 
     sockets: HashMap<FileDescriptor, Socket>,
-    bound: HashMap<ipv4::Endpoint, Rc<RefCell<Listener>>>,
+    bound: HashMap<ipv4::Endpoint, Rc<RefCell<Listener<RT>>>>,
 
     outgoing: OutgoingSender,
     #[allow(unused)]
@@ -256,7 +256,7 @@ impl<RT: Runtime> UdpPeer<RT> {
         Ok(())
     }
 
-    pub fn pop(&self, fd: FileDescriptor) -> PopFuture {
+    pub fn pop(&self, fd: FileDescriptor) -> PopFuture<RT> {
         let inner = self.inner.borrow();
         let listener = match inner.sockets.get(&fd) {
             Some(Socket {
@@ -287,12 +287,12 @@ impl<RT: Runtime> UdpPeer<RT> {
     }
 }
 
-pub struct PopFuture {
+pub struct PopFuture<RT: Runtime> {
     pub fd: FileDescriptor,
-    listener: Result<Rc<RefCell<Listener>>, Fail>,
+    listener: Result<Rc<RefCell<Listener<RT>>>, Fail>,
 }
 
-impl Future for PopFuture {
+impl<RT: Runtime> Future for PopFuture<RT> {
     type Output = Result<PacketBuf, Fail>;
 
     fn poll(self: Pin<&mut Self>, ctx: &mut Context) -> Poll<Self::Output> {
@@ -302,7 +302,7 @@ impl Future for PopFuture {
             Ok(ref l) => {
                 let mut listener = l.borrow_mut();
                 match listener.buf.pop_front() {
-                    Some((_, buf)) => return Poll::Ready(Ok(buf)),
+                    Some((_, buf)) => return Poll::Ready(Ok(buf.take())),
                     None => (),
                 }
                 let waker = ctx.waker();
@@ -313,14 +313,14 @@ impl Future for PopFuture {
     }
 }
 
-pub enum UdpOperation {
+pub enum UdpOperation<RT: Runtime> {
     Accept(FileDescriptor, Fail),
     Connect(FileDescriptor, Result<(), Fail>),
     Push(FileDescriptor, Result<(), Fail>),
-    Pop(ResultFuture<PopFuture>),
+    Pop(ResultFuture<PopFuture<RT>>),
 }
 
-impl Future for UdpOperation {
+impl<RT: Runtime> Future for UdpOperation<RT> {
     type Output = ();
 
     fn poll(self: Pin<&mut Self>, ctx: &mut Context) -> Poll<()> {
@@ -333,7 +333,7 @@ impl Future for UdpOperation {
     }
 }
 
-impl UdpOperation {
+impl<RT: Runtime> UdpOperation<RT> {
     pub fn expect_result(self) -> (FileDescriptor, OperationResult) {
         match self {
             UdpOperation::Push(fd, Err(e))
