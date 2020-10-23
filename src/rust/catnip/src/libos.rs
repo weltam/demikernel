@@ -160,6 +160,7 @@ impl<RT: Runtime> LibOS<RT> {
         let _s = static_span!();
         self.rt.scheduler().poll();
         while let Some(pkt) = self.rt.receive() {
+            let pkt = crate::runtime::ManagedPacketBuf::new(self.rt.clone(), pkt);
             if let Err(e) = self.engine.receive(pkt) {
                 warn!("Dropped packet: {:?}", e);
             }

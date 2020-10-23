@@ -18,7 +18,7 @@ use crate::{
         },
         MacAddress,
     },
-    runtime::{PacketBuf, Runtime},
+    runtime::{PacketBuf, Runtime, ManagedPacketBuf},
     scheduler::SchedulerHandle,
 };
 use futures::FutureExt;
@@ -71,14 +71,13 @@ impl<RT: Runtime> ArpPeer<RT> {
         }
     }
 
-    pub fn receive(&mut self, buf: PacketBuf) -> Result<(), Fail> {
+    pub fn receive(&mut self, buf: ManagedPacketBuf<RT>) -> Result<(), Fail> {
         // from RFC 826:
         // > ?Do I have the hardware type in ar$hrd?
         // > [optionally check the hardware length ar$hln]
         // > ?Do I speak the protocol in ar$pro?
         // > [optionally check the protocol length ar$pln]
-        let pdu = ArpPdu::parse(&buf)?;
-        self.rt.free_pktbuf(buf);
+        let pdu = ArpPdu::parse(&*buf)?;
 
         // from RFC 826:p
         // > Merge_flag := false

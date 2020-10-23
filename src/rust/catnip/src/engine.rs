@@ -28,7 +28,7 @@ use crate::{
             UdpOperation,
         },
     },
-    runtime::{PacketBuf, Runtime},
+    runtime::{ManagedPacketBuf, PacketBuf, Runtime},
     scheduler::Operation,
     sync::Bytes,
 };
@@ -74,7 +74,7 @@ impl<RT: Runtime> Engine<RT> {
         &self.rt
     }
 
-    pub fn receive(&mut self, bytes: PacketBuf) -> Result<(), Fail> {
+    pub fn receive(&mut self, bytes: ManagedPacketBuf<RT>) -> Result<(), Fail> {
         let _s = static_span!();
         let (header, payload) = Ethernet2Header::parse(bytes)?;
         if self.rt.local_link_addr() != header.dst_addr && !header.dst_addr.is_broadcast() {

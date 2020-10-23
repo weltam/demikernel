@@ -11,7 +11,7 @@ use crate::{
             Ipv4Protocol2,
         },
     },
-    runtime::{PacketBuf, PacketSerialize},
+    runtime::{Runtime, ManagedPacketBuf, PacketBuf, PacketSerialize},
 };
 use byteorder::{
     ByteOrder,
@@ -136,7 +136,7 @@ impl UdpHeader {
         UDP_HEADER2_SIZE
     }
 
-    pub fn parse(ipv4_header: &Ipv4Header, buf: PacketBuf) -> Result<(Self, PacketBuf), Fail> {
+    pub fn parse<RT: Runtime>(ipv4_header: &Ipv4Header, buf: ManagedPacketBuf<RT>) -> Result<(Self, PacketBuf), Fail> {
         if buf.len() < UDP_HEADER2_SIZE {
             return Err(Fail::Malformed {
                 details: "UDP segment too small",
@@ -162,7 +162,7 @@ impl UdpHeader {
         }
 
         let header = Self { src_port, dst_port };
-        let data_buf = buf.split(UDP_HEADER2_SIZE);
+        let data_buf = buf.split(UDP_HEADER2_SIZE).take();
         Ok((header, data_buf))
     }
 

@@ -30,6 +30,48 @@ use std::{
 
 pub const PKTBUF_SIZE: usize = 1514;
 
+pub struct ManagedPacketBuf<RT: Runtime> {
+    buf: Option<PacketBuf>,
+    rt: RT,
+}
+
+impl<RT: Runtime> Deref for ManagedPacketBuf<RT> {
+    type Target = PacketBuf;
+
+    fn deref(&self) -> &PacketBuf {
+        self.buf.as_ref().unwrap()
+    }
+}
+
+impl<RT: Runtime> DerefMut for ManagedPacketBuf<RT> {
+    fn deref_mut(&mut self) -> &mut PacketBuf {
+        self.buf.as_mut().unwrap()
+    }
+}
+
+impl<RT: Runtime> ManagedPacketBuf<RT> {
+    pub fn new(rt: RT, buf: PacketBuf) -> Self {
+        Self { rt, buf: Some(buf) }
+    }
+
+    pub fn split(mut self, ix: usize) -> Self {
+        let buf = self.buf.take().unwrap();
+        Self { rt: self.rt.clone(), buf: Some(buf.split(ix)) }
+    }
+
+    pub fn take(mut self) -> PacketBuf {
+        self.buf.take().unwrap()
+    }
+}
+
+impl<RT: Runtime> Drop for ManagedPacketBuf<RT> {
+    fn drop(&mut self) {
+        if let Some(buf) = self.buf.take() {
+            self.rt.free_pktbuf(buf)
+        }
+    }
+}
+
 pub struct PacketBuf {
     buf: Option<Box<[u8; PKTBUF_SIZE]>>,
     offset: usize,

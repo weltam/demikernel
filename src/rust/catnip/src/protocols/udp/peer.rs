@@ -28,7 +28,7 @@ use crate::{
             Ipv4Protocol2,
         },
     },
-    runtime::{Runtime, PacketBuf},
+    runtime::{Runtime, ManagedPacketBuf, PacketBuf},
     scheduler::SchedulerHandle,
 };
 use futures_intrusive::{
@@ -196,7 +196,7 @@ impl<RT: Runtime> UdpPeer<RT> {
         }
     }
 
-    pub fn receive(&self, ipv4_header: &Ipv4Header, buf: PacketBuf) -> Result<(), Fail> {
+    pub fn receive(&self, ipv4_header: &Ipv4Header, buf: ManagedPacketBuf<RT>) -> Result<(), Fail> {
         let (hdr, data) = UdpHeader::parse(ipv4_header, buf)?;
         let local = ipv4::Endpoint::new(ipv4_header.dst_addr, hdr.dst_port);
         let remote = hdr
