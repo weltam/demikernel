@@ -29,7 +29,7 @@ malloc_baseline::malloc_baseline(uint32_t field_size, string message_type) :
 //  1. Take away the string allocation, on both sides
 //  2. Take away the mallocs, leaving just the memcpys (have a buffer
 //  pre-allocated, that's freed in the constructor): this should be pretty fast
-void malloc_baseline::serialize_message(dmtr_sgarray_t &sga) {
+void malloc_baseline::serialize_message(dmtr_sgarray_t &sga, void *context) {
     if (out_p != NULL) {
         free(out_p);
     }

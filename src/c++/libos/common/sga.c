@@ -29,22 +29,24 @@ int dmtr_sgafree(dmtr_sgarray_t *sga) {
     //printf("Addr of sga: %p, segments: %p\n", (void *)sga, (void *)sga->sga_segs);
 
     if (NULL == sga) {
+        // printf("Returning because entire sga is null\n");
         return 0;
     }
 
     if (NULL != sga->recv_segments) {
         // the one sga here has dpdk data
+        // printf("Returning because recv_segments is non-null\n");
         return 0;
     }
 
     if (NULL == sga->sga_buf) {
-        //printf("num segs: %d\n", sga->sga_numsegs);
+        // printf("num segs: %d\n", sga->sga_numsegs);
         for (size_t i = 0; i < sga->sga_numsegs; ++i) {
-            //printf("freeing a scatter-gather array: %p\n",sga->sga_segs[i].sgaseg_buf);
+            // printf("freeing a scatter-gather array: %p\n",sga->sga_segs[i].sgaseg_buf);
             free(sga->sga_segs[i].sgaseg_buf);
         }
     } else {
-        //printf("freeing a scatter-gather array stored in sga_buf:%p\n", sga->sga_buf);
+        // printf("freeing a scatter-gather array stored in sga_buf:%p\n", sga->sga_buf);
         free(sga->sga_buf);
     }
 

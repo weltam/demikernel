@@ -185,3 +185,15 @@ int dmtr_stop_timer(dmtr_qtoken_t *qtok_out, int qd) {
     
 }
 
+int dmtr_set_zero_copy() {
+    return 0;
+}
+
+int dmtr_set_external_memory() {
+    return 0;
+}
+
+int dmtr_init_mempools(uint32_t num_segments, uint32_t message_size) {
+    return 0;
+}
+

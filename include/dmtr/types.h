@@ -71,6 +71,7 @@ typedef struct dmtr_header {
     uint32_t h_magic;
     uint32_t h_bytes;
     uint32_t h_sgasegs;
+    uint32_t h_sga_id;
 } dmtr_header_t;
 
 #ifdef __cplusplus

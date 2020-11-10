@@ -17,102 +17,99 @@
  * */
 
 
-Msg5L* five_level(uint32_t field_size) {
-    Msg5L* msg = new Msg5L;
-    Msg4L* left = four_level(field_size/2);
-    Msg4L* right = four_level(field_size/2);
-    msg->set_allocated_left(left);
-    msg->set_allocated_right(right);
+inline Msg5L five_level(const string& string_field) {
+    Msg5L msg;
+    Msg4L* left = msg.mutable_left();
+    Msg4L* right = msg.mutable_right();
+    fill_in_four_level(left, string_field);
+    fill_in_four_level(right, string_field);
     return msg;
 }
 
-Msg4L* four_level(uint32_t field_size) {
-    Msg4L* msg = new Msg4L;
-    Msg3L* left = three_level(field_size/2);
-    Msg3L* right = three_level(field_size/2);
-    msg->set_allocated_left(left);
-    msg->set_allocated_right(right);
+inline void fill_in_four_level(Msg4L* msg, const string& string_field)  {
+    Msg3L* left = msg->mutable_left();
+    Msg3L* right = msg->mutable_right();
+    fill_in_three_level(left, string_field);
+    fill_in_three_level(right, string_field);
+}
+
+inline Msg4L four_level(const string& string_field) {
+    Msg4L msg;
+    Msg3L* left = msg.mutable_left();
+    Msg3L* right = msg.mutable_right();
+    fill_in_three_level(left, string_field);
+    fill_in_three_level(right, string_field);
     return msg; 
 }
 
-Msg3L* three_level(uint32_t field_size) {
-    Msg3L* msg = new Msg3L;
-    Msg2L* left = two_level(field_size/2);
-    Msg2L* right = two_level(field_size/2);
-    msg->set_allocated_left(left);
-    msg->set_allocated_right(right);
-    return msg; 
+inline void fill_in_three_level(Msg3L* msg, const string& string_field) {
+    Msg2L* left = msg->mutable_left();
+    Msg2L* right = msg->mutable_right();
+    fill_in_two_level(left, string_field);
+    fill_in_two_level(right, string_field);
 }
 
-Msg2L* two_level(uint32_t field_size) {
-    Msg2L* msg = new Msg2L;
-    Msg1L* left = one_level(field_size/2);
-    Msg1L* right = one_level(field_size/2);
-    msg->set_allocated_left(left);
-    msg->set_allocated_right(right);
-    return msg; 
-}
-
-Msg1L* one_level(uint32_t field_size) {
-    Msg1L* msg = new Msg1L;
-    GetMessage* get1 = get_message(field_size/2);
-    GetMessage* get2 = get_message(field_size/2);
-    msg->set_allocated_left(get1);
-    msg->set_allocated_right(get2);
+Msg3L three_level(const string& string_field) {
+    Msg3L msg;
+    Msg2L* left = msg.mutable_left();
+    Msg2L* right = msg.mutable_right();
+    fill_in_two_level(left, string_field);
+    fill_in_two_level(right, string_field);
     return msg;
 }
 
-GetMessage* get_message(uint32_t field_size) {
-    GetMessage* get = new GetMessage;
-    get->set_key(generate_string(field_size));
+inline void fill_in_two_level(Msg2L* msg, const string& string_field) {
+    Msg1L* left = msg->mutable_left();
+    Msg1L* right = msg->mutable_right();
+    fill_in_one_level(left, string_field);
+    fill_in_one_level(right, string_field);
+}
+
+inline Msg2L two_level(const string& string_field) {
+    Msg2L msg;
+    Msg1L* left = msg.mutable_left();
+    Msg1L* right = msg.mutable_right();
+    fill_in_one_level(left, string_field);
+    fill_in_one_level(right, string_field);
+    return msg;
+}
+
+inline void fill_in_one_level(Msg1L* msg, const string& string_field) {
+    GetMessage *get1 = msg->mutable_left();
+    get1->set_key(string_field);
+    GetMessage *get2 = msg->mutable_left();
+    get2->set_key(string_field);
+}
+
+
+inline Msg1L one_level(const string& string_field) {
+    Msg1L msg;
+    GetMessage *get1 = msg.mutable_left();
+    get1->set_key(string_field);
+    GetMessage *get2 = msg.mutable_left();
+    get2->set_key(string_field);
+    return msg;
+}
+
+inline GetMessage get_message(const string& string_field) {
+    GetMessage get;
+    get.set_key(string_field);
     return get;
 }
 
-PutMessage* put_message(uint32_t field_size) {
+
+PutMessage* put_message(const string& string_field) {
     PutMessage* put = new PutMessage;
-    put->set_key(generate_string(field_size));
-    put->set_value(generate_string(field_size));
+    put->set_key(string_field);
+    put->set_value(string_field);
     return put;
 }
 
 protobuf_echo::protobuf_echo(uint32_t field_size, string message_type) :
     echo_message(echo_message::library::PROTOBUF, field_size, message_type),
-    getMsg(),
-    putMsg(),
-    msg1L(),
-    msg2L(),
-    msg3L(),
-    msg4L(),
-    msg5L()
-{
-    switch (my_msg_enum) {
-        case echo_message::msg_type::GET:
-            getMsg = *get_message(field_size);
-            break;
-        case echo_message::msg_type::PUT:
-            putMsg = *put_message(field_size);
-            break;
-        case echo_message::msg_type::MSG1L:
-            msg1L = *one_level(field_size);
-            break;
-        case echo_message::msg_type::MSG2L:
-            msg2L = *two_level(field_size);
-            break;
-        case echo_message::msg_type::MSG3L:
-            msg3L = *three_level(field_size);
-            break;
-        case echo_message::msg_type::MSG4L:
-            msg4L = *four_level(field_size);
-            break;
-        case echo_message::msg_type::MSG5L:
-            msg5L = *five_level(field_size);
-            break;
-    }
-
-}
+    string_field(generate_string(field_size)) {}
 
 void protobuf_echo::handle_message(const string& msg) {
-
     switch (my_msg_enum) {
         case echo_message::msg_type::GET:
             getMsg_deser.ParseFromString(msg);
@@ -140,21 +137,7 @@ void protobuf_echo::handle_message(const string& msg) {
 
 void protobuf_echo::deserialize_message(dmtr_sgarray_t &sga) {
     assert(sga.sga_numsegs == 1);
-    /*uint8_t *ptr = (uint8_t *)sga.sga_segs[0].sgaseg_buf;
-    
-    size_t totalLen = *(size_t *)ptr;
-    ptr += sizeof(totalLen);
-    
-    size_t typeLen = *(size_t *)ptr;
-    ptr += sizeof(typeLen);
-    string type((char *)ptr, typeLen);
-    ptr += typeLen;
-    
-    size_t dataLen = *(size_t *)ptr;
-    ptr += sizeof(dataLen);
-    string data((char *)ptr, dataLen);*/
     string data((char *)sga.sga_segs[0].sgaseg_buf, sga.sga_segs[0].sgaseg_len);
-    //ptr += dataLen;
     handle_message(data);
 }
 
@@ -168,68 +151,35 @@ void protobuf_echo::encode_msg(dmtr_sgarray_t &sga,
 
     sga.sga_segs[0].sgaseg_len = dataLen;
     dmtr_malloc(&p, dataLen);
+    // printf("Allocating protobuf data at: %p, length: %u\n", p, (unsigned)dataLen);
     assert(p != NULL);
     sga.sga_segs[0].sgaseg_buf = p;
     memcpy(p, (void *)data.c_str(), dataLen);
-    /*size_t typeLen = my_message_type.length();
-    size_t totalLen = (typeLen + sizeof(typeLen) +
-                        dataLen + sizeof(dataLen) +
-                        sizeof(totalLen));
-
-    dmtr_malloc(&p, totalLen);
-    assert(p != NULL);
-    sga.sga_segs[0].sgaseg_len = totalLen;
-    sga.sga_segs[0].sgaseg_buf = p;
-    char *buf = reinterpret_cast<char *>(p);
-    char *ptr = buf;
-
-    *((size_t *) ptr) = totalLen;
-    ptr += sizeof(totalLen);
-    assert((size_t)(ptr-buf) < totalLen);
-
-    *((size_t *) ptr) = typeLen;
-    ptr += sizeof(typeLen);
-    assert((size_t)(ptr-buf) < totalLen);
-    
-    memcpy(ptr, my_message_type.c_str(), typeLen);
-    ptr += typeLen;
-    assert((size_t)(ptr-buf) < totalLen);
-
-    *((size_t *) ptr) = dataLen;
-    ptr += sizeof(dataLen);
-    assert((size_t)(ptr-buf) < totalLen);
-
-    memcpy(ptr, data.c_str(), dataLen);
-    ptr += dataLen;
-    assert((size_t)(ptr-buf) == totalLen);*/
-
 }
 
-void protobuf_echo::serialize_message(dmtr_sgarray_t &sga) {
+void protobuf_echo::serialize_message(dmtr_sgarray_t &sga, void *context) {
     sga.sga_numsegs = 1;
-
-    switch (my_msg_enum) {
-        case echo_message::msg_type::GET:
-            encode_msg(sga, getMsg);
-            break;
-        case echo_message::msg_type::PUT:
-            encode_msg(sga, putMsg);
-            break;
-        case echo_message::msg_type::MSG1L:
-            encode_msg(sga, msg1L);
-            break;
-        case echo_message::msg_type::MSG2L:
-            encode_msg(sga, msg2L);
-            break;
-        case echo_message::msg_type::MSG3L:
-            encode_msg(sga, msg3L);
-            break;
-        case echo_message::msg_type::MSG4L:
-            encode_msg(sga, msg4L);
-            break;
-        case echo_message::msg_type::MSG5L:
-            encode_msg(sga, msg5L);
-            break;
-    }
+    if (my_msg_enum == echo_message::msg_type::GET) {
+        GetMessage getMsg = get_message(string_field);
+        encode_msg(sga, getMsg);
+    } else if (my_msg_enum == echo_message::msg_type::PUT) {
+        PutMessage *putMsg = put_message(string_field);
+        encode_msg(sga, *putMsg);
+    } else if (my_msg_enum == echo_message::msg_type::MSG1L) {
+        Msg1L msg1L = one_level(string_field);
+        encode_msg(sga, msg1L);
+    } else if (my_msg_enum == echo_message::msg_type::MSG2L) {
+        Msg2L msg2L = two_level(string_field);
+        encode_msg(sga, msg2L);
+    } else if (my_msg_enum == echo_message::msg_type::MSG3L) {
+        Msg3L msg3L = three_level(string_field);
+        encode_msg(sga, msg3L);
+    } else if (my_msg_enum == echo_message::msg_type::MSG4L) {
+        Msg4L msg4L = four_level(string_field);
+        encode_msg(sga, msg4L);
+    } else if (my_msg_enum == echo_message::msg_type::MSG5L) {
+        Msg5L msg5L = five_level(string_field);
+        encode_msg(sga, msg5L);
+    } 
 }
 

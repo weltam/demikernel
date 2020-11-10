@@ -60,8 +60,6 @@ int dmtr_wait_any(dmtr_qresult_t *qr_out, int *ready_offset, dmtr_qtoken_t qts[]
                     if (ready_offset != NULL)
                         *ready_offset = i;
                     return ret;
-                } else {
-                    std::cout << "Ret is " << ret << "; idx: " << i << std::endl;
                 }
             }
         }

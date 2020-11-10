@@ -386,6 +386,8 @@ int dmtr::posix_queue::net_push(const dmtr_sgarray_t *sga, task::thread_type::yi
     header.h_magic = htonl(DMTR_HEADER_MAGIC);
     header.h_bytes = htonl(message_bytes);
     header.h_sgasegs = htonl(sga->sga_numsegs);
+    header.h_sga_id = sga->id;
+
 
     // set up header at beginning of packet
     iov[0].iov_base = &header;
@@ -566,6 +568,7 @@ int dmtr::posix_queue::net_pop(dmtr_sgarray_t *sga, task::thread_type::yield_typ
     header.h_magic = ntohl(header.h_magic);
     header.h_bytes = ntohl(header.h_bytes);
     header.h_sgasegs = ntohl(header.h_sgasegs);
+    header.h_sga_id = ntohl(header.h_sga_id);
 
     if (DMTR_HEADER_MAGIC != header.h_magic) {
         return EILSEQ;
@@ -623,7 +626,9 @@ int dmtr::posix_queue::net_pop(dmtr_sgarray_t *sga, task::thread_type::yield_typ
 
     // now we have the whole buffer, start filling sga
     uint8_t *p = reinterpret_cast<uint8_t *>(sga->sga_buf);
+    // printf("Filling in recv buf at %p\n", p);
     sga->sga_numsegs = header.h_sgasegs;
+    sga->id = header.h_sga_id;
     for (size_t i = 0; i < sga->sga_numsegs; ++i) {
         size_t seglen = ntohl(*reinterpret_cast<uint32_t *>(p));
         sga->sga_segs[i].sgaseg_len = seglen;

@@ -56,7 +56,8 @@ class echo_message
             }
 
     // encode and serialize message
-    public: virtual void serialize_message(dmtr_sgarray_t &sga) = 0;
+    // context could be a flatbuffers builder, or nothing at all
+    public: virtual void serialize_message(dmtr_sgarray_t &sga, void *context) = 0;
     // decode and deserialize message
     public: virtual void deserialize_message(dmtr_sgarray_t &sga) = 0;
     // print extra counters out

@@ -12,132 +12,55 @@
 
 flatbuffers_echo::flatbuffers_echo(uint32_t field_size, string message_type) :
     echo_message(echo_message::library::FLATBUFFERS, field_size, message_type),
-    string_field(generate_string(field_size))
-    /*getBuilder(field_size),
-    putBuilder(field_size),
-    msg1LBuilder(field_size),
-    msg2LBuilder(field_size),
-    msg3LBuilder(field_size),
-    msg4LBuilder(field_size),
-    msg5LBuilder(field_size),*/
-    /*getMsg(getBuilder),
-    putMsg(putBuilder),
-    msg1L(msg1LBuilder),
-    msg2L(msg2LBuilder),
-    msg3L(msg3LBuilder),
-    msg4L(msg4LBuilder),
-    msg5L(msg5LBuilder)*/
-{
-    switch (my_msg_enum) {
-        case echo_message::msg_type::GET:
-            //build_get();
-            break;
-        case echo_message::msg_type::PUT:
-            //build_put();
-            break;
-        case echo_message::msg_type::MSG1L:
-            //build_msg1L();
-            break;
-        case echo_message::msg_type::MSG2L:
-            //build_msg2L();
-            break;
-        case echo_message::msg_type::MSG3L:
-            //build_msg3L();
-            break;
-        case echo_message::msg_type::MSG4L:
-            //build_msg4L();
-            break;
-        case echo_message::msg_type::MSG5L:
-            //build_msg5L();
-            break;
-    }
-}
+    string_field(generate_string(field_size)) {}
 
-void flatbuffers_echo::serialize_message(dmtr_sgarray_t &sga) {
-    flatbuffers::FlatBufferBuilder getBuilder;
-    flatbuffers::Offset<flatbuffers::String> string_offset(getBuilder.CreateString(string_field));
-    GetMessageFBBuilder getMsg(getBuilder);
-    getMsg.add_key(string_offset);
-    auto final_get = getMsg.Finish();
-    getBuilder.Finish(final_get);
-    
-    switch (my_msg_enum) {
-        case echo_message::msg_type::GET:
-            encode_msg(sga, getBuilder.GetBufferPointer(), getBuilder.GetSize());
-            break;
-        case echo_message::msg_type::PUT:
-            //encode_msg(sga, putBuilder.GetBufferPointer(), putBuilder.GetSize());
-            break;
-        case echo_message::msg_type::MSG1L:
-            //encode_msg(sga, msg1LBuilder.GetBufferPointer(), msg1LBuilder.GetSize());
-            break;
-        case echo_message::msg_type::MSG2L:
-            //encode_msg(sga, msg2LBuilder.GetBufferPointer(), msg2LBuilder.GetSize());
-            break;
-        case echo_message::msg_type::MSG3L:
-            //encode_msg(sga, msg3LBuilder.GetBufferPointer(), msg3LBuilder.GetSize());
-            break;
-        case echo_message::msg_type::MSG4L:
-            //encode_msg(sga, msg4LBuilder.GetBufferPointer(), msg4LBuilder.GetSize());
-            break;
-        case echo_message::msg_type::MSG5L:
-            //encode_msg(sga, msg5LBuilder.GetBufferPointer(), msg5LBuilder.GetSize());
-            break;
+void flatbuffers_echo::serialize_message(dmtr_sgarray_t &sga, void *context) {
+    flatbuffers::FlatBufferBuilder* builder = reinterpret_cast<flatbuffers::FlatBufferBuilder *>(context);
+
+    if (my_msg_enum == echo_message::msg_type::GET) {
+        auto msgKey = builder->CreateString(string_field);
+        GetMessageFBBuilder getMsg(*builder);
+        getMsg.add_key(msgKey);
+        auto final_get = getMsg.Finish();
+        builder->Finish(final_get);
+    } else if (my_msg_enum == echo_message::msg_type::PUT) {
+        auto msgKey = builder->CreateString(string_field);
+        auto msgValue = builder->CreateString(string_field);
+        PutMessageFBBuilder putMsg(*builder);
+        putMsg.add_key(msgKey);
+        putMsg.add_value(msgValue);
+        auto final_put = putMsg.Finish();
+        builder->Finish(final_put);
+    } else if (my_msg_enum == echo_message::msg_type::MSG1L) {
+        Msg1LFBBuilder msg1L(*builder);
+        build_msg1L(msg1L, builder);
+
+    } else if (my_msg_enum == echo_message::msg_type::MSG2L) {
+        Msg2LFBBuilder msg2L(*builder);
+        build_msg2L(msg2L, builder);
+
+    } else if (my_msg_enum == echo_message::msg_type::MSG3L) {
+        Msg3LFBBuilder msg3L(*builder);
+        build_msg3L(msg3L, builder);
+
+    } else if (my_msg_enum == echo_message::msg_type::MSG4L) {
+        Msg4LFBBuilder msg4L(*builder);
+        build_msg4L(msg4L, builder);
+
+    } else if (my_msg_enum == echo_message::msg_type::MSG5L) {
+        Msg5LFBBuilder msg5L(*builder);
+        build_msg5L(msg5L, builder);
     }
+    encode_msg(sga, builder->GetBufferPointer(), builder->GetSize());
 }
 
 void flatbuffers_echo::deserialize_message(dmtr_sgarray_t &sga) {
     assert(sga.sga_numsegs == 1);
-    /*uint8_t *ptr = (uint8_t *)sga.sga_segs[0].sgaseg_buf;
-    
-    size_t totalLen = *(size_t *)ptr;
-    ptr += sizeof(totalLen);
-    
-    size_t typeLen = *(size_t *)ptr;
-    ptr += sizeof(typeLen);
-    string type((char *)ptr, typeLen);
-    ptr += typeLen;
-    
-    size_t dataLen = *(size_t *)ptr;
-    ptr += sizeof(dataLen);*/
-    
     uint8_t *data_ptr = (uint8_t *)(sga.sga_segs[0].sgaseg_buf);
     handle_msg(data_ptr);
 }
 
 void flatbuffers_echo::encode_msg(dmtr_sgarray_t &sga, uint8_t* data_buf, int size) {
-    /*void *p = NULL;
-    size_t dataLen = (size_t) size;
-    size_t typeLen = my_message_type.length();
-    // everything without the actual data
-    size_t totalLen = (typeLen + sizeof(typeLen) +
-                        sizeof(dataLen) +
-                        sizeof(totalLen));
-    dmtr_malloc(&p, totalLen);
-    assert(p != NULL);
-    sga.sga_numsegs = 2;
-    sga.sga_segs[0].sgaseg_len = totalLen;
-    sga.sga_segs[0].sgaseg_buf = p;
-
-    char *buf = reinterpret_cast<char *>(p);
-    char *ptr = buf;
-
-    *((size_t *) ptr) = totalLen;
-    ptr += sizeof(totalLen);
-    assert((size_t)(ptr-buf) < totalLen);
-
-    *((size_t *) ptr) = typeLen;
-    ptr += sizeof(typeLen);
-    assert((size_t)(ptr-buf) < totalLen);
-    
-    memcpy(ptr, my_message_type.c_str(), typeLen);
-    ptr += typeLen;
-    assert((size_t)(ptr-buf) < totalLen);
-
-    *((size_t *) ptr) = dataLen;
-    ptr += sizeof(dataLen);
-    assert((size_t)(ptr-buf) < totalLen);*/
-
     // write the data into the 2nd buf ptr
     sga.sga_numsegs = 1;
     size_t dataLen = (size_t) size;
@@ -146,7 +69,7 @@ void flatbuffers_echo::encode_msg(dmtr_sgarray_t &sga, uint8_t* data_buf, int si
 }
 
 template<class T>
-void read_data(uint8_t* buf, const T** ptr) {
+inline void read_data(uint8_t* buf, const T** ptr) {
     *ptr = flatbuffers::GetRoot<T>(buf);
 }
 
@@ -181,91 +104,74 @@ void flatbuffers_echo::handle_msg(uint8_t* buf) {
             read_data<Msg5LFB>(buf, &local_msg5L);
             break;
     }
-
 }
 
-/*void flatbuffers_echo::build_get() {
-    getMsg.add_key(string_offset);
-    auto final_get = getMsg.Finish();
-    getBuilder.Finish(final_get);
-    std::cout << "Finished get" << std::endl;
-}
-
-void flatbuffers_echo::build_put() {
+// TODO: remove these functions so they're not nested.
+void flatbuffers_echo::build_msg1L(Msg1LFBBuilder msg1L, flatbuffers::FlatBufferBuilder *msg1LBuilder) {
     auto string_field = generate_string(my_field_size);
-    auto key = putBuilder.CreateString(string_field);
-    putMsg.add_key(key);
-    putMsg.add_value(key);
-    auto final_put = putMsg.Finish();
-    putBuilder.Finish(final_put);
-}
-
-void flatbuffers_echo::build_msg1L() {
-    auto string_field = generate_string(my_field_size);
-    auto leaf = msg1LBuilder.CreateString(string_field);
-    auto left = CreateGetMessageFB(msg1LBuilder, leaf);
-    auto right = CreateGetMessageFB(msg1LBuilder, leaf);
+    auto leaf = msg1LBuilder->CreateString(string_field);
+    auto left = CreateGetMessageFB(*msg1LBuilder, leaf);
+    auto right = CreateGetMessageFB(*msg1LBuilder, leaf);
     msg1L.add_left(left);
     msg1L.add_right(right);
     auto final_msg = msg1L.Finish();
-    msg1LBuilder.Finish(final_msg);
+    msg1LBuilder->Finish(final_msg);
 }
 
-void flatbuffers_echo::build_msg2L() {
+void flatbuffers_echo::build_msg2L(Msg2LFBBuilder msg2L, flatbuffers::FlatBufferBuilder *msg2LBuilder) {
     auto string_field = generate_string(my_field_size);
-    auto leaf = msg2LBuilder.CreateString(string_field);
-    auto getLeaf = CreateGetMessageFB(msg2LBuilder, leaf);
-    auto left = CreateMsg1LFB(msg2LBuilder, getLeaf, getLeaf);
-    auto right = CreateMsg1LFB(msg2LBuilder, getLeaf, getLeaf);
+    auto leaf = msg2LBuilder->CreateString(string_field);
+    auto getLeaf = CreateGetMessageFB(*msg2LBuilder, leaf);
+    auto left = CreateMsg1LFB(*msg2LBuilder, getLeaf, getLeaf);
+    auto right = CreateMsg1LFB(*msg2LBuilder, getLeaf, getLeaf);
     msg2L.add_left(left);
     msg2L.add_right(right);
     auto final_msg = msg2L.Finish();
-    msg2LBuilder.Finish(final_msg);
+    msg2LBuilder->Finish(final_msg);
 
 }
 
-void flatbuffers_echo::build_msg3L() {
+void flatbuffers_echo::build_msg3L(Msg3LFBBuilder msg3L, flatbuffers::FlatBufferBuilder *msg3LBuilder) {
     auto string_field = generate_string(my_field_size);
-    auto leaf = msg3LBuilder.CreateString(string_field);
-    auto getLeaf = CreateGetMessageFB(msg3LBuilder, leaf);
-    auto msg1LLeaf = CreateMsg1LFB(msg3LBuilder, getLeaf, getLeaf);
-    auto left = CreateMsg2LFB(msg3LBuilder, msg1LLeaf, msg1LLeaf);
-    auto right = CreateMsg2LFB(msg3LBuilder, msg1LLeaf, msg1LLeaf);
+    auto leaf = msg3LBuilder->CreateString(string_field);
+    auto getLeaf = CreateGetMessageFB(*msg3LBuilder, leaf);
+    auto msg1LLeaf = CreateMsg1LFB(*msg3LBuilder, getLeaf, getLeaf);
+    auto left = CreateMsg2LFB(*msg3LBuilder, msg1LLeaf, msg1LLeaf);
+    auto right = CreateMsg2LFB(*msg3LBuilder, msg1LLeaf, msg1LLeaf);
     msg3L.add_left(left);
     msg3L.add_right(right);
     auto final_msg = msg3L.Finish();
-    msg3LBuilder.Finish(final_msg);
+    msg3LBuilder->Finish(final_msg);
 
 }
 
-void flatbuffers_echo::build_msg4L() {
+void flatbuffers_echo::build_msg4L(Msg4LFBBuilder msg4L, flatbuffers::FlatBufferBuilder *msg4LBuilder) {
     auto string_field = generate_string(my_field_size);
-    auto leaf = msg4LBuilder.CreateString(string_field);
-    auto getLeaf = CreateGetMessageFB(msg4LBuilder, leaf);
-    auto msg1LLeaf = CreateMsg1LFB(msg4LBuilder, getLeaf, getLeaf);
-    auto msg2LLeaf = CreateMsg2LFB(msg4LBuilder, msg1LLeaf, msg1LLeaf);
-    auto left = CreateMsg3LFB(msg4LBuilder, msg2LLeaf, msg2LLeaf);
-    auto right = CreateMsg3LFB(msg4LBuilder, msg2LLeaf, msg2LLeaf);
+    auto leaf = msg4LBuilder->CreateString(string_field);
+    auto getLeaf = CreateGetMessageFB(*msg4LBuilder, leaf);
+    auto msg1LLeaf = CreateMsg1LFB(*msg4LBuilder, getLeaf, getLeaf);
+    auto msg2LLeaf = CreateMsg2LFB(*msg4LBuilder, msg1LLeaf, msg1LLeaf);
+    auto left = CreateMsg3LFB(*msg4LBuilder, msg2LLeaf, msg2LLeaf);
+    auto right = CreateMsg3LFB(*msg4LBuilder, msg2LLeaf, msg2LLeaf);
     msg4L.add_left(left);
     msg4L.add_right(right);
     auto final_msg = msg4L.Finish();
-    msg4LBuilder.Finish(final_msg);
-
+    msg4LBuilder->Finish(final_msg);
 }
 
-void flatbuffers_echo::build_msg5L() {
+void flatbuffers_echo::build_msg5L(Msg5LFBBuilder msg5L, flatbuffers::FlatBufferBuilder *msg5LBuilder) {
     auto string_field = generate_string(my_field_size);
-    auto leaf = msg5LBuilder.CreateString(string_field);
-    auto getLeaf = CreateGetMessageFB(msg5LBuilder, leaf);
-    auto msg1LLeaf = CreateMsg1LFB(msg5LBuilder, getLeaf, getLeaf);
-    auto msg2LLeaf = CreateMsg2LFB(msg5LBuilder, msg1LLeaf, msg1LLeaf);
-    auto msg3LLeaf = CreateMsg3LFB(msg5LBuilder, msg2LLeaf, msg2LLeaf);
-    auto left = CreateMsg4LFB(msg5LBuilder, msg3LLeaf, msg3LLeaf);
-    auto right = CreateMsg4LFB(msg5LBuilder, msg3LLeaf, msg3LLeaf);
+    auto leaf = msg5LBuilder->CreateString(string_field);
+    auto getLeaf = CreateGetMessageFB(*msg5LBuilder, leaf);
+    auto msg1LLeaf = CreateMsg1LFB(*msg5LBuilder, getLeaf, getLeaf);
+    auto msg2LLeaf = CreateMsg2LFB(*msg5LBuilder, msg1LLeaf, msg1LLeaf);
+    auto msg3LLeaf = CreateMsg3LFB(*msg5LBuilder, msg2LLeaf, msg2LLeaf);
+    auto left = CreateMsg4LFB(*msg5LBuilder, msg3LLeaf, msg3LLeaf);
+    auto right = CreateMsg4LFB(*msg5LBuilder, msg3LLeaf, msg3LLeaf);
     msg5L.add_left(left);
     msg5L.add_right(right);
     auto final_msg = msg5L.Finish();
-    msg5LBuilder.Finish(final_msg);
+    msg5LBuilder->Finish(final_msg);
 
-}*/
+}
 

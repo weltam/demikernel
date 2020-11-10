@@ -25,7 +25,7 @@ malloc_baseline_no_str::malloc_baseline_no_str(uint32_t field_size, string messa
 #endif
 }
 
-void malloc_baseline_no_str::serialize_message(dmtr_sgarray_t &sga) {
+void malloc_baseline_no_str::serialize_message(dmtr_sgarray_t &sga, void *context) {
     if (out_p != NULL) {
         free(out_p);
     }

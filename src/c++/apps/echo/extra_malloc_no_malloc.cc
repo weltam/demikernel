@@ -38,7 +38,7 @@ malloc_baseline_no_malloc::~malloc_baseline_no_malloc() {
     }
 }
 
-void malloc_baseline_no_malloc::serialize_message(dmtr_sgarray_t &sga) {
+void malloc_baseline_no_malloc::serialize_message(dmtr_sgarray_t &sga, void *context) {
     // first, create a String from the buffer
     sga.sga_numsegs = 1;
 #ifdef DMTR_PROFILE

@@ -33,7 +33,7 @@ malloc_baseline_single_memcpy::~malloc_baseline_single_memcpy() {
     }
 }
 
-void malloc_baseline_single_memcpy::serialize_message(dmtr_sgarray_t &sga) {
+void malloc_baseline_single_memcpy::serialize_message(dmtr_sgarray_t &sga, void *context) {
     sga.sga_numsegs = 1;
 #ifdef DMTR_PROFILE
     auto start_memcpy = rdtsc();

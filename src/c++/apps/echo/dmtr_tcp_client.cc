@@ -35,8 +35,12 @@
 #include <string.h>
 #include <boost/chrono/chrono_io.hpp>
 #define DMTR_PROFILE
+#define LWIP
+
+#ifdef LWIP
 #include <rte_common.h>
 #include <rte_mbuf.h>
+#endif
 
 namespace po = boost::program_options;
 uint64_t sent = 0, recved = 0;
@@ -116,6 +120,9 @@ int main(int argc, char *argv[]) {
     malloc_baseline_no_malloc malloc_baseline_no_malloc(packet_size, message);
     malloc_baseline_single_memcpy malloc_baseline_single_memcpy(packet_size, message);
 
+    capnp::MallocMessageBuilder message_builder;
+    flatbuffers::FlatBufferBuilder fb_builder(packet_size);
+    void *context = NULL;
     if (zero_copy) {
         dmtr_set_zero_copy();
         sga.sga_numsegs = num_send_segments; // so it doesn't error out
@@ -130,41 +137,43 @@ int main(int argc, char *argv[]) {
         } else if (!std::strcmp(cereal_system.c_str(), "malloc_baseline")) {
             fill_in_sga(sga, num_send_segments);
             echo = &malloc_baseline_echo;
-            echo->serialize_message(sga);
+            echo->serialize_message(sga, context);
             free_buf = true;
         } else if (!std::strcmp(cereal_system.c_str(), "malloc_no_str")) {
             fill_in_sga(sga, num_send_segments);
             echo = &malloc_baseline_no_str;
-            echo->serialize_message(sga);
+            echo->serialize_message(sga, context);
             free_buf = true;
         } else if (!std::strcmp(cereal_system.c_str(), "memcpy")) {
             fill_in_sga(sga, num_send_segments);
             echo = &malloc_baseline_no_malloc;
-            echo->serialize_message(sga);
+            echo->serialize_message(sga, context);
             free_buf = true;
         } else if (!std::strcmp(cereal_system.c_str(), "single_memcpy")) {
             fill_in_sga(sga, num_send_segments);
             echo = &malloc_baseline_single_memcpy;
-            echo->serialize_message(sga);
+            echo->serialize_message(sga, context);
             free_buf = true;
         } else if (!std::strcmp(cereal_system.c_str(), "protobuf")) {
             allocate_segments(&sga, num_send_segments);
             echo = &protobuf_data;
-            echo->serialize_message(sga);
+            echo->serialize_message(sga, context);
             free_buf = true;
         } else if (!std::strcmp(cereal_system.c_str(), "protobytes")) {
             allocate_segments(&sga, num_send_segments);
             echo = &proto_bytes_data;
-            echo->serialize_message(sga);
+            echo->serialize_message(sga, context);
             free_buf = true;
         } else if (!std::strcmp(cereal_system.c_str(), "capnproto")) {
             allocate_segments(&sga, num_send_segments);
             echo = &capnproto_data;
-            echo->serialize_message(sga);
+            context = (void *)(&message_builder);
+            echo->serialize_message(sga, context);
         } else if (!std::strcmp(cereal_system.c_str(), "flatbuffers")) {
             allocate_segments(&sga, num_send_segments);
             echo = &flatbuffers_data;
-            echo->serialize_message(sga);
+            context = (void *)(&fb_builder);
+            echo->serialize_message(sga, context);
         } else {
             std::cerr << "Serialization cereal_system " << cereal_system << " unknown." << std::endl;
             exit(1);
@@ -319,7 +328,9 @@ int main(int argc, char *argv[]) {
                 // free the recv buffer
                 DMTR_OK(dmtr_sgafree(&wait_out.qr_value.sga));
                 if (wait_out.qr_value.sga.recv_segments != NULL) {
+#ifdef LWIP
                     rte_pktmbuf_free((struct rte_mbuf*) wait_out.qr_value.sga.recv_segments);
+#endif
                 }
 
                 // send a new packet on the client_idx
@@ -359,6 +370,7 @@ int main(int argc, char *argv[]) {
         seqno_to_client.insert(std::make_pair(last_sent, c));
         sga.id = last_sent;
         
+        printf("Sga size: %u\n", sga.sga_numsegs);
         // push message to server
         DMTR_OK(dmtr_push(&push_tokens[c], qd, &sga));
         sent++;
@@ -389,7 +401,9 @@ int main(int argc, char *argv[]) {
         // free the allocated sga
         DMTR_OK(dmtr_sgafree(&wait_out.qr_value.sga));
         if (wait_out.qr_value.sga.recv_segments != NULL) {
+#ifdef LWIP
             rte_pktmbuf_free((struct rte_mbuf*) wait_out.qr_value.sga.recv_segments);
+#endif
         }
 
         // count the iteration

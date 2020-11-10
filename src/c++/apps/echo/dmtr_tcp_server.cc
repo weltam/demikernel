@@ -32,9 +32,12 @@
 #include <unordered_map>
 #include <stdio.h>
 #include <string.h>
+#define LWIP
 
+#ifdef LWIP
 #include <rte_common.h>
 #include <rte_mbuf.h>
+#endif
 
 // #define DMTR_PROFILE
 #define NUM_CONNECTIONS 20
@@ -153,6 +156,9 @@ int main(int argc, char *argv[])
         // no need to allocate on receive side, those will be automatically
         // filled in
         allocate_segments(&pushed_buffers[i], num_send_segments);
+        // set recv_segments as None for all these buffers so freeing happens
+        pushed_buffers[i].recv_segments = NULL;
+        pushed_buffers[i].sga_buf = NULL;
         num_recved[i] = 0;
     }
 
@@ -173,12 +179,16 @@ int main(int argc, char *argv[])
     if (signal(SIGINT, sig_handler) == SIG_ERR)
         std::cout << "\ncan't catch SIGINT\n";
 
+    echo_message::library library;
+
 
     if (zero_copy) { 
         dmtr_set_zero_copy();
         out_sga.sga_numsegs = num_send_segments; // so it doesn't error out
         DMTR_OK(dmtr_init_mempools(packet_size, num_send_segments));
     } else {
+        // for now: set using external memory
+        // DMTR_OK(dmtr_set_external_memory());
         // initialize serialized data structure that will be sent back
         if (!run_protobuf_test) {
             fill_in_sga(out_sga, num_send_segments);
@@ -207,8 +217,10 @@ int main(int argc, char *argv[])
             echo = &proto_bytes_data;
         } else if (!std::strcmp(cereal_system.c_str(), "capnproto")) {
             echo = &capnproto_data;
+            library = echo_message::library::CAPNPROTO;
         } else if (!std::strcmp(cereal_system.c_str(), "flatbuffers")) {
             echo = &flatbuffers_data;
+            library = echo_message::library::FLATBUFFERS;
         } else {
             std::cerr << "Serialization cereal_system " << cereal_system  << " unknown." << std::endl;
              exit(1);
@@ -302,17 +314,21 @@ int main(int argc, char *argv[])
                 // free last recv buffer
                 // check that the memory here is not null before calling free
                 if (num_recved[idx] > 1) {
+                    // printf("Freeing previous recv buf\n");
                     DMTR_OK(dmtr_sgafree(&popped_buffers[idx]));
                     // also free segments from last buffer
                     DMTR_OK(dmtr_sgafree_segments(&popped_buffers[idx]));
-                if (popped_buffers[idx].recv_segments != NULL) {
-                    rte_pktmbuf_free((struct rte_mbuf*) popped_buffers[idx].recv_segments);
-                 }
+                    if (popped_buffers[idx].recv_segments != NULL) {
+#ifdef LWIP
+                        rte_pktmbuf_free((struct rte_mbuf*) popped_buffers[idx].recv_segments);
+#endif
+                    }
                 }
                 popped_buffers[idx] = wait_out.qr_value.sga;
                 //printf("Addr of sga segments array: %p, segment 0: %p, dpdk pkt: %p\n", (void *)(&popped_buffers[idx]), (void *)(popped_buffers[idx].sga_segs[0].sgaseg_buf), popped_buffers[idx].dpdk_pkt);
                 // only protobuf allocates extra pointers to free
-                if (free_push) {
+                if (free_push && num_recved[idx] > 1) {
+                    // printf("Trying to free pushed buffer\n");
                     DMTR_OK(dmtr_sgafree(&pushed_buffers[idx]));
                 }
 
@@ -324,7 +340,20 @@ int main(int argc, char *argv[])
                     auto start_serialize_counter = rdtsc();
                     auto start_serialize = boost::chrono::steady_clock::now();
 #endif
-                    echo->serialize_message(pushed_buffers[idx]);
+                    // define context if capnproto or flatbuffers
+                    capnp::MallocMessageBuilder message_builder;
+                    flatbuffers::FlatBufferBuilder fb_builder(packet_size);
+                    void *context = NULL;
+                    switch (library) {
+                        case echo_message::library::CAPNPROTO:
+                            context = (void *)(&message_builder);
+                            break;
+                        case echo_message::library::FLATBUFFERS:
+                            context = (void *)(&fb_builder);
+                        default:
+                            break;
+                    }
+                    echo->serialize_message(pushed_buffers[idx], context);
 #ifdef DMTR_PROFILE
                     auto end_serialize = boost::chrono::steady_clock::now();
                     auto end_serialize_counter = rdtsc();

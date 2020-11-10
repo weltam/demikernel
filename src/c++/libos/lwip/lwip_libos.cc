@@ -188,6 +188,11 @@ int dmtr_set_zero_copy() {
     return 0;
 }
 
+int dmtr_set_external_memory() {
+    DMTR_OK(dmtr::lwip_queue::set_use_external_memory());
+    return 0;
+}
+
 int dmtr_init_mempools(uint32_t num_segments, uint32_t message_size) {
     DMTR_OK(dmtr::lwip_queue::init_mempools(num_segments, message_size));
     return 0;

@@ -47,6 +47,11 @@ set(TCP_KV_CLIENT_SOURCES ${KV_APPS_DIR}/dmtr_tcp_client.cc
     ${CAPNP_SRCS} ${KV_APPS_DIR}/flatbuffers.cc ${KV_APPS_DIR}/capnproto.cc
     ${KV_APPS_DIR}/kv.cc ${KV_APPS_DIR}/handcrafted.cc)
 
+set (KV_TEST_SOURCES ${KV_APPS_DIR}/test_kv.cc
+${SRC_KV_MSG_PROTO} ${HDR_KV_MSG_PROTO} ${KV_APPS_DIR}/protobuf.cc
+${CAPNP_SRCS} ${KV_APPS_DIR}/flatbuffers.cc ${KV_APPS_DIR}/capnproto.cc
+${KV_APPS_DIR}/kv.cc ${KV_APPS_DIR}/handcrafted.cc)
+
 # POSIX TCP server
 add_executable(dmtr-posix-kv-server ${TCP_KV_SERVER_SOURCES})
 target_link_libraries(dmtr-posix-kv-server dmtr-libos-posix yaml-cpp

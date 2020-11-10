@@ -12,65 +12,41 @@
 
 capnproto_echo::capnproto_echo(uint32_t field_size, string message_type) :
     echo_message(echo_message::library::CAPNPROTO, field_size, message_type),
-    malloc_builder(),
-    getMsg(nullptr),
-    putMsg(nullptr),
-    msg1L(nullptr),
-    msg2L(nullptr),
-    msg3L(nullptr),
-    msg4L(nullptr),
-    msg5L(nullptr)
-{
-    switch (my_msg_enum) {
-        case echo_message::msg_type::GET:
-            build_get();
-            break;
-        case echo_message::msg_type::PUT:
-            build_put();
-            break;
-        case echo_message::msg_type::MSG1L:
-            build_msg1L();
-            break;
-        case echo_message::msg_type::MSG2L:
-            build_msg2L();
-            break;
-        case echo_message::msg_type::MSG3L:
-            build_msg3L();
-            break;
-        case echo_message::msg_type::MSG4L:
-            build_msg4L();
-            break;
-        case echo_message::msg_type::MSG5L:
-            build_msg5L();
-            break;
-    }
-}
+    string_field(generate_string(field_size)) {}
 
-void capnproto_echo::serialize_message(dmtr_sgarray_t &sga) {
-    switch (my_msg_enum) {
-        case echo_message::msg_type::GET:
-            encode_msg(sga, malloc_builder.getSegmentsForOutput());
-            break;
-        case echo_message::msg_type::PUT:
-            encode_msg(sga, malloc_builder.getSegmentsForOutput());
-            break;
-        case echo_message::msg_type::MSG1L:
-            encode_msg(sga, malloc_builder.getSegmentsForOutput());
-            break;
-        case echo_message::msg_type::MSG2L:
-            encode_msg(sga, malloc_builder.getSegmentsForOutput());
-            break;
-        case echo_message::msg_type::MSG3L:
-            encode_msg(sga, malloc_builder.getSegmentsForOutput());
-            break;
-        case echo_message::msg_type::MSG4L:
-            encode_msg(sga, malloc_builder.getSegmentsForOutput());
-            break;
-        case echo_message::msg_type::MSG5L:
-            encode_msg(sga, malloc_builder.getSegmentsForOutput());
-            break;
-    }
+void capnproto_echo::serialize_message(dmtr_sgarray_t &sga, void *context) {
+    if (my_msg_enum == echo_message::msg_type::GET) {
+        GetMessageCP::Builder getMsg = (*(reinterpret_cast<capnp::MallocMessageBuilder*>(context))).initRoot<GetMessageCP>();
+        build_get(getMsg);
+        encode_msg(sga, (*(reinterpret_cast<capnp::MallocMessageBuilder*>(context))).getSegmentsForOutput());
+    } else if (my_msg_enum == echo_message::msg_type::PUT) {
+        PutMessageCP::Builder putMsg = (*(reinterpret_cast<capnp::MallocMessageBuilder*>(context))).initRoot<PutMessageCP>();
+        build_put(putMsg);
+        encode_msg(sga, (*(reinterpret_cast<capnp::MallocMessageBuilder*>(context))).getSegmentsForOutput());
+    } else if (my_msg_enum == echo_message::msg_type::MSG1L) {
+        Msg1LCP::Builder msg1L = (*(reinterpret_cast<capnp::MallocMessageBuilder*>(context))).initRoot<Msg1LCP>();
+        build_msg1L(msg1L);
+        encode_msg(sga, (*(reinterpret_cast<capnp::MallocMessageBuilder*>(context))).getSegmentsForOutput());
 
+    } else if (my_msg_enum == echo_message::msg_type::MSG2L) {
+        Msg2LCP::Builder msg2L = (*(reinterpret_cast<capnp::MallocMessageBuilder*>(context))).initRoot<Msg2LCP>();
+        build_msg2L(msg2L);
+        encode_msg(sga, (*(reinterpret_cast<capnp::MallocMessageBuilder*>(context))).getSegmentsForOutput());
+    
+    } else if (my_msg_enum == echo_message::msg_type::MSG3L) {
+        Msg3LCP::Builder msg3L = (*(reinterpret_cast<capnp::MallocMessageBuilder*>(context))).initRoot<Msg3LCP>();
+        build_msg3L(msg3L);
+        encode_msg(sga, (*(reinterpret_cast<capnp::MallocMessageBuilder*>(context))).getSegmentsForOutput());
+
+    } else if (my_msg_enum == echo_message::msg_type::MSG4L) {
+        Msg4LCP::Builder msg4L = (*(reinterpret_cast<capnp::MallocMessageBuilder*>(context))).initRoot<Msg4LCP>();
+        build_msg4L(msg4L);
+        encode_msg(sga, (*(reinterpret_cast<capnp::MallocMessageBuilder*>(context))).getSegmentsForOutput());
+    } else if (my_msg_enum == echo_message::msg_type::MSG5L) {
+        Msg5LCP::Builder msg5L = (*(reinterpret_cast<capnp::MallocMessageBuilder*>(context))).initRoot<Msg5LCP>();
+        build_msg5L(msg5L);
+        encode_msg(sga, (*(reinterpret_cast<capnp::MallocMessageBuilder*>(context))).getSegmentsForOutput());
+    }
 }
 
 void capnproto_echo::deserialize_message(dmtr_sgarray_t &sga) {
@@ -115,23 +91,6 @@ void capnproto_echo::encode_msg(dmtr_sgarray_t &sga, kj::ArrayPtr<const kj::Arra
     capnp::SegmentArrayMessageReader message(segments);
     //sga.sga_numsegs = segments.size() + 1;
     sga.sga_numsegs = segments.size();
-    /*void *p = NULL;
-    size_t typeLen = my_message_type.length();
-    size_t totalLen = (typeLen + sizeof(typeLen));
-    dmtr_malloc(&p, totalLen);
-    assert(p != NULL);
-
-    sga.sga_segs[0].sgaseg_len = totalLen;
-    sga.sga_segs[0].sgaseg_buf = p;
-    char *buf = reinterpret_cast<char *>(p);
-    char *ptr = buf;
-    *((size_t *) ptr) = typeLen;
-    ptr += sizeof(typeLen);
-    assert((size_t)(ptr-buf) < totalLen);
-    
-    memcpy(ptr, my_message_type.c_str(), typeLen);
-    ptr += typeLen;
-    assert((size_t)(ptr-buf) < totalLen);*/
 
     // write the data into the next buffers
     for (size_t i = 0; i < segments.size(); i++) {
@@ -141,7 +100,6 @@ void capnproto_echo::encode_msg(dmtr_sgarray_t &sga, kj::ArrayPtr<const kj::Arra
         sga.sga_segs[i].sgaseg_buf = (void *) bytes.begin();
     }
 
-    deserialize_message(sga);
 }
 
 void capnproto_echo::decode_msg(dmtr_sgarray_t &sga, kj::ArrayPtr<const capnp::word>* segments) {
@@ -156,88 +114,76 @@ void capnproto_echo::decode_msg(dmtr_sgarray_t &sga, kj::ArrayPtr<const capnp::w
     }
 }
 
-void capnproto_echo::build_get() {
-    getMsg = malloc_builder.initRoot<GetMessageCP>();
-    getMsg.setKey(generate_string(my_field_size));
+inline void capnproto_echo::build_get(GetMessageCP::Builder getMsg) {
+    getMsg.setKey(string_field);
 }
 
-void capnproto_echo::recursive_get(GetMessageCP::Builder builder, uint32_t field_size) {
-    builder.setKey(generate_string(field_size));
+inline void capnproto_echo::recursive_get(GetMessageCP::Builder builder, uint32_t field_size) {
+    builder.setKey(string_field);
 }
 
-void capnproto_echo::build_put() {
-    putMsg = malloc_builder.initRoot<PutMessageCP>();
-    putMsg.setKey(generate_string(my_field_size/2));
+inline void capnproto_echo::build_put(PutMessageCP::Builder putMsg) {
+    putMsg.setKey(string_field);
     putMsg.setValue(generate_string(my_field_size/2));
-
 }
 
-void capnproto_echo::build_msg1L() {
-    msg1L = malloc_builder.initRoot<Msg1LCP>();
+inline void capnproto_echo::build_msg1L(Msg1LCP::Builder msg1L) {
     auto left = msg1L.initLeft();
     auto right = msg1L.initRight();
     recursive_get(left, my_field_size/2);
     recursive_get(right, my_field_size/2);
 }
 
-void capnproto_echo::recursive_msg1L(Msg1LCP::Builder builder, uint32_t field_size) {
+inline void capnproto_echo::recursive_msg1L(Msg1LCP::Builder builder, uint32_t field_size) {
     auto left = builder.initLeft();
     recursive_get(left, field_size/2);
     auto right = builder.initRight();
     recursive_get(right, field_size/2);
 }
 
-void capnproto_echo::build_msg2L() {
-    msg2L = malloc_builder.initRoot<Msg2LCP>();
-    
+inline void capnproto_echo::build_msg2L(Msg2LCP::Builder msg2L) {
     auto left = msg2L.initLeft();
     recursive_msg1L(left, my_field_size/2);
     auto right = msg2L.initRight();
     recursive_msg1L(right, my_field_size/2);
 }
 
-void capnproto_echo::recursive_msg2L(Msg2LCP::Builder builder, uint32_t field_size) {
+inline void capnproto_echo::recursive_msg2L(Msg2LCP::Builder builder, uint32_t field_size) {
     auto left = builder.initLeft();
     recursive_msg1L(left, field_size/2);
     auto right = builder.initRight();
     recursive_msg1L(right, field_size/2);
 }
 
-void capnproto_echo::build_msg3L() {
-    msg3L = malloc_builder.initRoot<Msg3LCP>();
-
+inline void capnproto_echo::build_msg3L(Msg3LCP::Builder msg3L) {
     auto left = msg3L.initLeft();
     recursive_msg2L(left, my_field_size/2);
     auto right = msg3L.initRight();
     recursive_msg2L(right, my_field_size/2);
 }
 
-void capnproto_echo::recursive_msg3L(Msg3LCP::Builder builder, uint32_t field_size) {
+inline void capnproto_echo::recursive_msg3L(Msg3LCP::Builder builder, uint32_t field_size) {
     auto left = builder.initLeft();
     recursive_msg2L(left, field_size/2);
     auto right = builder.initRight();
     recursive_msg2L(right, field_size/2);
 }
 
-void capnproto_echo::build_msg4L() {
-    msg4L = malloc_builder.initRoot<Msg4LCP>();
-
+inline void capnproto_echo::build_msg4L(Msg4LCP::Builder msg4L) {
     auto left = msg4L.initLeft();
     recursive_msg3L(left, my_field_size/2);
     auto right = msg4L.initRight();
     recursive_msg3L(right, my_field_size/2);
 }
 
-void capnproto_echo::recursive_msg4L(Msg4LCP::Builder builder, uint32_t field_size) {
+inline void capnproto_echo::recursive_msg4L(Msg4LCP::Builder builder, uint32_t field_size) {
     auto left = builder.initLeft();
     recursive_msg3L(left, field_size/2);
     auto right = builder.initRight();
     recursive_msg3L(right, field_size/2);
 }
 
-void capnproto_echo::build_msg5L() {
-    msg5L = malloc_builder.initRoot<Msg5LCP>();
-
+inline void capnproto_echo::build_msg5L(Msg5LCP::Builder msg5L) {
     auto left = msg5L.initLeft();
     recursive_msg4L(left, my_field_size/2);
     auto right = msg5L.initRight();

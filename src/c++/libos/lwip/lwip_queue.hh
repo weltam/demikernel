@@ -40,6 +40,13 @@ struct lwip_sga {
     uint32_t total_size;
 } typedef lwip_sga_t;
 
+struct external_memory_config {
+    void *addr;
+    size_t num_pages;
+    uint16_t buf_size;
+    struct ::rte_mbuf_ext_shared_info *shinfo;
+} typedef ext_mem_cfg_t;
+
 namespace dmtr {
 
 class lwip_queue : public io_queue {
@@ -72,6 +79,8 @@ class lwip_queue : public io_queue {
     private: static uint64_t invalid_packets;
     private: static bool zero_copy_mode;
     private: static lwip_sga_t *lwip_sga;
+    private: static ext_mem_cfg_t *ext_mem_cfg;
+    private: static bool use_external_memory;
     public: lwip_queue(int qd);
     public: static int new_object(std::unique_ptr<io_queue> &q_out, int qd);
 
@@ -93,6 +102,8 @@ class lwip_queue : public io_queue {
 
     public: static int init_dpdk(int argc, char *argv[]);
     public: static int finish_dpdk_init(YAML::Node &config);
+    public: static int init_ext_mem();
+    public: static void free_external_buffer_callback(void *addr, void *opaque);
     protected: static int get_dpdk_port_id(uint16_t &id_out);
     protected: static int ip_sum(uint16_t &sum_out, const uint16_t *hdr, int hdr_len);
     protected: static int init_dpdk_port(uint16_t port, struct rte_mempool &mbuf_pool);
@@ -114,6 +125,7 @@ class lwip_queue : public io_queue {
     }
 
     public: static int set_zero_copy();
+    public: static int set_use_external_memory();
     public: static int init_mempools(uint32_t message_size, uint32_t num_segments);
     private: static void * get_data_pointer(struct rte_mbuf* pkt, bool has_header);
     private: size_t get_header_size();

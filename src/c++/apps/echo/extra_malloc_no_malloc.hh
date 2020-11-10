@@ -26,7 +26,7 @@ class malloc_baseline_no_malloc : public echo_message
 
     public: malloc_baseline_no_malloc(uint32_t field_size, string message_type);
     public: ~malloc_baseline_no_malloc();
-    public: virtual void serialize_message(dmtr_sgarray_t &sga);
+    public: virtual void serialize_message(dmtr_sgarray_t &sga, void *context);
     public: virtual void deserialize_message(dmtr_sgarray_t &sga);
     public: virtual void print_counters();
 };

@@ -31,10 +31,12 @@
 #include <rte_memcpy.h>
 #include <rte_udp.h>
 #include <unistd.h>
+#include <sys/mman.h>
 
 #include <functional>
 
-
+#define PAGE_SIZE sysconf(_SC_PAGE_SIZE)
+#define NUM_EXTERNAL_PAGES 1000
 namespace bpo = boost::program_options;
 //#define DMTR_NO_SER
 //#define DMTR_ALLOCATE_SEGMENTS
@@ -48,7 +50,7 @@ namespace bpo = boost::program_options;
 #define IP_VERSION 0x40
 #define IP_HDRLEN  0x05 /* default IP header length == five 32-bits words. */
 #define IP_VHL_DEF (IP_VERSION | IP_HDRLEN)
-//#define DMTR_DEBUG 1
+// #define DMTR_DEBUG 1
 //#define DMTR_PROFILE 1
 //#define MBUF_BUF_SIZE RTE_MBUF_DEFAULT_BUF_SIZE
 // default mbuf size is ->RTE_MBUF_DEFAULT_DATAROOM + RTE_PKTMBUF_HEADROOM
@@ -94,6 +96,10 @@ lwip_sga_t global_lwip_sga;
 lwip_sga_t *dmtr::lwip_queue::lwip_sga = &global_lwip_sga;
 uint32_t dmtr::lwip_queue::current_segment_size = 0;
 bool dmtr::lwip_queue::current_has_header = true;
+bool dmtr::lwip_queue::use_external_memory = false;
+
+ext_mem_cfg_t global_ext_mem_cfg;
+ext_mem_cfg_t *dmtr::lwip_queue::ext_mem_cfg = &global_ext_mem_cfg;
 
 const struct rte_ether_addr dmtr::lwip_queue::ether_broadcast = {
     .addr_bytes = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
@@ -455,7 +461,56 @@ int dmtr::lwip_queue::finish_dpdk_init(YAML::Node &config)
         default_src = new struct sockaddr_in();
         default_src->sin_addr.s_addr = in_addr.s_addr;
     }
+    
+    if (use_external_memory) {
+        DMTR_OK(init_ext_mem());
+    }
     return 0;
+}
+
+int dmtr::lwip_queue::init_ext_mem() {
+    // first, mmap some memory: let's say like 100 pages
+    std::cout << "Page size is " << PAGE_SIZE << std::endl;
+    size_t page_size = PAGE_SIZE;
+    size_t num_pages = NUM_EXTERNAL_PAGES;
+    void * addr = mmap(NULL, page_size * num_pages, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, -1, 0);
+    if ( addr == MAP_FAILED ) {
+        printf("Failed to mmap memory\n");
+        return 1;
+    } 
+
+    // second, register the external memory
+    int ret = rte_extmem_register(addr, page_size*num_pages, NULL, 0, page_size);
+    if (ret != 0) {
+        std::cout << "Register Errno: " << rte_strerror(rte_errno) << std::endl;
+        return ret;
+    }
+
+    // third, need to map the external memory per port
+    uint16_t pid = 0;
+    RTE_ETH_FOREACH_DEV(pid) {
+        struct rte_eth_dev *dev = &rte_eth_devices[pid];
+        ret = rte_dev_dma_map(dev->device, addr, 0, page_size*num_pages);
+        if (ret != 0) {
+            std::cout << "dma map errno: " << rte_strerror(rte_errno) << std::endl;
+            return ret;
+        }
+    }
+    ext_mem_cfg->addr = addr;
+    ext_mem_cfg->num_pages = num_pages;
+    ext_mem_cfg->buf_size = (uint16_t)(num_pages * page_size);
+    memset(reinterpret_cast<char *>(addr), 'D', page_size * num_pages);
+    struct ::rte_mbuf_ext_shared_info* shinfo = ::rte_pktmbuf_ext_shinfo_init_helper(ext_mem_cfg->addr, &ext_mem_cfg->buf_size, free_external_buffer_callback, NULL);
+    ext_mem_cfg->shinfo = shinfo;
+    printf("Finished registering the external memory\n");
+    return 0;
+
+}
+
+void dmtr::lwip_queue::free_external_buffer_callback(void *addr, void *opaque) {
+    printf("Addr of mmap'd memory: %p\n", ext_mem_cfg->addr);
+    printf("In this function: addr is %p\n", addr);
+    // do nothing, for now
 }
 
 const size_t dmtr::lwip_queue::our_max_queue_depth = 1024;
@@ -746,8 +801,14 @@ int dmtr::lwip_queue::push_thread(task::thread_type::yield_type &yield, task::th
             pkt = pkts[0];
         } else {
             DMTR_OK(rte_pktmbuf_alloc(pkt, our_mbuf_pool));
+            // try to attach an external mbuf
+            if (use_external_memory) {
+                printf("Using ext mem\n");
+                ::rte_pktmbuf_attach_extbuf(pkt, ext_mem_cfg->addr, NULL, ext_mem_cfg->buf_size, ext_mem_cfg->shinfo);
+            }
         }
         auto *p = rte_pktmbuf_mtod(pkt, uint8_t *);
+
         // packet layout order is (from outside -> in):
         // ether_hdr
         // ipv4_hdr
@@ -932,7 +993,7 @@ int dmtr::lwip_queue::push_thread(task::thread_type::yield_type &yield, task::th
         // }
         printf("send: udp len: %d\n", ntohs(udp_hdr->dgram_len));
         printf("send: pkt len: %d\n", total_len);
-        //rte_pktmbuf_dump(stderr, pkt, total_len);
+        rte_pktmbuf_dump(stderr, pkt, total_len);
 #endif
 
         size_t pkts_sent = 0;
@@ -1052,6 +1113,7 @@ dmtr::lwip_queue::service_incoming_packets() {
         if (valid_packet) {
             //printf("Setting ptr to dpdk pkt in sga as %p\n", (void *)(pkts[i]));
             sga.recv_segments = (void *)(pkts[i]);
+            printf("Received a valid packet\n");
         } else {
             rte_pktmbuf_free(pkts[i]);
         }
@@ -1078,7 +1140,7 @@ dmtr::lwip_queue::service_incoming_packets() {
             our_recv_queues[src_lwip] = new std::queue<dmtr_sgarray_t>();
             // put packet into queue
             insert_recv_queue(src_lwip, sga);
-            std::cout << "Placing in accept queue: " << src.sin_addr.s_addr << std::endl;
+            std::cout << "Placing in accept queue: " << src.sin_addr.s_addr << ", has id " << sga.id<< std::endl;
             // also place in accept queue
             insert_recv_queue(lwip_addr(dst), sga);
             in_packets++;
@@ -1250,14 +1312,16 @@ dmtr::lwip_queue::parse_packet(struct sockaddr_in &src,
 #if DMTR_DEBUG
             printf("recv: buf [%lu] len: %u\n", i, seg_len);
 #endif
-
             void *buf = NULL;
             DMTR_OK(dmtr_malloc(&buf, seg_len));
+            // printf("Allocating recv buf at %p at length %u\n", (void *)buf, (unsigned)seg_len);
             // for DPDK, pointers are scattered
             sga.sga_buf = NULL;
             sga.sga_segs[i].sgaseg_buf = buf;
             //printf("Allocating sga to: %p, sgasegs is at %p\n", buf, (void *)sga.sga_segs);
             // todo: remove copy if possible.
+            // char *s = reinterpret_cast<char *>(p);
+            // printf("last char of s: %c\n", s[seg_len - 1]);
             rte_memcpy(buf, p, seg_len);
             p += seg_len;
 
@@ -1605,6 +1669,11 @@ int dmtr::lwip_queue::parse_ether_addr(struct rte_ether_addr &mac_out, const cha
 
 int dmtr::lwip_queue::set_zero_copy() {
     zero_copy_mode = true;
+    return 0;
+}
+
+int dmtr::lwip_queue::set_use_external_memory() {
+    use_external_memory = true;
     return 0;
 }
 
