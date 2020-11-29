@@ -11,11 +11,12 @@ use crate::{
     },
     protocols::ipv4::Endpoint,
     runtime::Runtime,
+    operations::OperationResult,
     scheduler::{
         Operation,
         SchedulerHandle,
     },
-    sync::BytesMut,
+    sync::{Bytes, BytesMut},
 };
 use libc::c_int;
 use std::{
@@ -120,6 +121,11 @@ impl<RT: Runtime> LibOS<RT> {
         self.rt.scheduler().insert(future).into_raw()
     }
 
+    pub fn push2(&mut self, fd: FileDescriptor, buf: Bytes) -> QToken {
+        let future = self.engine.push(fd, buf);
+        self.rt.scheduler().insert(future).into_raw()
+    }
+
     pub fn pushto(&mut self, fd: FileDescriptor, sga: &dmtr_sgarray_t, to: Endpoint) -> QToken {
         let _s = static_span!();
         let mut len = 0;
@@ -171,6 +177,16 @@ impl<RT: Runtime> LibOS<RT> {
         }
     }
 
+    pub fn wait2(&mut self, qt: QToken) -> (FileDescriptor, OperationResult) {
+        let handle = self.rt.scheduler().from_raw_handle(qt).unwrap();
+        loop {
+            self.poll_bg_work();
+            if handle.has_completed() {
+                return self.take_operation2(handle);
+            }
+        }
+    }
+
     pub fn wait_any(&mut self, qts: &[QToken]) -> (usize, dmtr_qresult_t) {
         let _s = static_span!();
         loop {
@@ -192,6 +208,14 @@ impl<RT: Runtime> LibOS<RT> {
             Operation::Background(..) => panic!("Polled background operation"),
         };
         dmtr_qresult_t::pack(r, qd, qt)
+    }
+
+    fn take_operation2(&mut self, handle: SchedulerHandle) -> (FileDescriptor, OperationResult) {
+        match self.rt.scheduler().take(handle) {
+            Operation::Tcp(f) => f.expect_result(),
+            Operation::Udp(f) => f.expect_result(),
+            Operation::Background(..) => panic!("Polled background operation"),
+        }
     }
 
     fn poll_bg_work(&mut self) {

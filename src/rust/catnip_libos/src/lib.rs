@@ -48,8 +48,8 @@ use yaml_rust::{
 };
 
 // mod bindings;
-mod dpdk;
-mod runtime;
+pub mod dpdk;
+pub mod runtime;
 
 use crate::runtime::DPDKRuntime;
 use anyhow::{
