@@ -1,6 +1,8 @@
 #![feature(maybe_uninit_uninit_array)]
 #![feature(try_blocks)]
 
+use std::time::Duration;
+use histogram::Histogram;
 use must_let::must_let;
 use std::str::FromStr;
 use catnip_libos::runtime::DPDKRuntime;
@@ -156,6 +158,43 @@ fn main() {
                 must_let!(let (_, OperationResult::Pop(..)) = libos.wait2(qtoken));
                 samples.push(start.elapsed());
             }
+
+            println!("Finished ({} samples)", samples.len());
+            let mut h = Histogram::new();
+            for s in samples {
+                h.increment(s.as_nanos() as u64).unwrap();
+            }
+            println!("Min:   {:?}", Duration::from_nanos(h.minimum().unwrap()));
+            println!(
+                "p25:   {:?}",
+                Duration::from_nanos(h.percentile(0.25).unwrap())
+            );
+            println!(
+                "p50:   {:?}",
+                Duration::from_nanos(h.percentile(0.50).unwrap())
+            );
+            println!(
+                "p75:   {:?}",
+                Duration::from_nanos(h.percentile(0.75).unwrap())
+            );
+            println!(
+                "p90:   {:?}",
+                Duration::from_nanos(h.percentile(0.90).unwrap())
+            );
+            println!(
+                "p95:   {:?}",
+                Duration::from_nanos(h.percentile(0.95).unwrap())
+            );
+            println!(
+                "p99:   {:?}",
+                Duration::from_nanos(h.percentile(0.99).unwrap())
+            );
+            println!(
+                "p99.9: {:?}",
+                Duration::from_nanos(h.percentile(0.999).unwrap())
+            );
+            println!("Max:   {:?}", Duration::from_nanos(h.maximum().unwrap()));
+            
         }
         else {
             panic!("Set either ECHO_SERVER or ECHO_CLIENT");

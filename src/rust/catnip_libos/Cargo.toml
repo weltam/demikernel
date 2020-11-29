@@ -18,6 +18,7 @@ rand = { version = "0.7.3", features = ["small_rng"] }
 yaml-rust = "0.4.4"
 dpdk-rs = { git = "https://github.com/sujayakar/dpdk-rs", rev = "66d2b6058dc047975a4945bedf44a93a9c19226a" }
 must-let = { git = "https://github.com/sujayakar/must-let" }
+histogram = "0.6.9"
 
 [build-dependencies]
 bindgen = "0.55.1"
