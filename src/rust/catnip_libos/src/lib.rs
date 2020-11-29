@@ -47,7 +47,7 @@ use yaml_rust::{
     YamlLoader,
 };
 
-mod bindings;
+// mod bindings;
 mod dpdk;
 mod runtime;
 
@@ -151,7 +151,7 @@ pub extern "C" fn dmtr_init(argc: c_int, argv: *mut *mut c_char) -> c_int {
             disable_arp = arp_disabled;
             println!("ARP disabled: {:?}", disable_arp);
         }
-        
+
         let eal_init_args = match config_obj["dpdk"]["eal_init"] {
             Yaml::Array(ref arr) => arr
                 .iter()

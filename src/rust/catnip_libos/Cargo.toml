@@ -16,6 +16,7 @@ hashbrown = { version = "0.9", features = ["nightly"] }
 libc = "0.2.77"
 rand = { version = "0.7.3", features = ["small_rng"] }
 yaml-rust = "0.4.4"
+dpdk-rs = { git = "https://github.com/sujayakar/dpdk-rs", rev = "66d2b6058dc047975a4945bedf44a93a9c19226a" }
 
 [build-dependencies]
 bindgen = "0.55.1"

@@ -1,5 +1,5 @@
 use hashbrown::HashMap;
-use crate::bindings::{
+use dpdk_rs::{
     rte_eth_dev,
     rte_eth_devices,
     rte_mbuf,
