@@ -124,7 +124,28 @@ fn main() {
         let mut libos = LibOS::new(runtime)?;
 
         if std::env::var("ECHO_SERVER").is_ok() {
-            todo!();
+            let listen_addr = &config_obj["server"]["bind"];
+            let host_s = listen_addr["host"].as_str().expect("Invalid host");
+            let host = Ipv4Addr::from_str(host_s).expect("Invalid host");
+            let port_i = listen_addr["port"].as_i64().expect("Invalid port");
+            let port = ip::Port::try_from(port_i as u16)?;
+            let endpoint = Endpoint::new(host, port);
+
+            let sockfd = libos.socket(libc::AF_INET, libc::SOCK_STREAM, 0)?;
+            libos.bind(sockfd, endpoint)?;
+            libos.listen(sockfd, 10)?;
+
+            let qtoken = libos.accept(sockfd);
+            must_let!(let (_, OperationResult::Accept(fd)) = libos.wait2(qtoken));
+            println!("Accepted connection!");
+
+            loop {
+                let qtoken = libos.pop(fd);
+                must_let!(let (_, OperationResult::Pop(_, buf)) = libos.wait2(qtoken));
+
+                let qtoken = libos.push2(fd, buf);
+                must_let!(let (_, OperationResult::Push) = libos.wait2(qtoken));
+            }
         }
         else if std::env::var("ECHO_CLIENT").is_ok() {
             let num_iters: usize = std::env::var("NUM_ITERS").unwrap().parse().unwrap();
@@ -148,8 +169,7 @@ fn main() {
             let buf = buf.freeze();
 
             let mut samples = Vec::with_capacity(num_iters);
-
-            for i in 0..num_iters {
+            for _ in 0..num_iters {
                 let start = Instant::now();
                 let qtoken = libos.push2(sockfd, buf.clone());
                 must_let!(let (_, OperationResult::Push) = libos.wait2(qtoken));
@@ -158,12 +178,14 @@ fn main() {
                 must_let!(let (_, OperationResult::Pop(..)) = libos.wait2(qtoken));
                 samples.push(start.elapsed());
             }
-
-            println!("Finished ({} samples)", samples.len());
+            println!("Finished ({} samples)", num_iters);
             let mut h = Histogram::new();
+            let mut total = 0;
             for s in samples {
                 h.increment(s.as_nanos() as u64).unwrap();
+                total += s.as_nanos();
             }
+
             println!("Min:   {:?}", Duration::from_nanos(h.minimum().unwrap()));
             println!(
                 "p25:   {:?}",
@@ -173,6 +195,7 @@ fn main() {
                 "p50:   {:?}",
                 Duration::from_nanos(h.percentile(0.50).unwrap())
             );
+            println!("Avg:   {:?}", Duration::from_nanos((total as f64 / num_iters as f64) as u64));
             println!(
                 "p75:   {:?}",
                 Duration::from_nanos(h.percentile(0.75).unwrap())
@@ -194,7 +217,7 @@ fn main() {
                 Duration::from_nanos(h.percentile(0.999).unwrap())
             );
             println!("Max:   {:?}", Duration::from_nanos(h.maximum().unwrap()));
-            
+
         }
         else {
             panic!("Set either ECHO_SERVER or ECHO_CLIENT");
