@@ -179,14 +179,11 @@ fn main() {
                 samples.push(start.elapsed());
             }
             println!("Finished ({} samples)", num_iters);
-            let mut h = Histogram::new();
-            let mut total = 0;
+            let mut h = Histogram::configure().precision(4).build().unwrap();
             for s in samples {
                 h.increment(s.as_nanos() as u64).unwrap();
-                total += s.as_nanos();
             }
 
-            println!("Min:   {:?}", Duration::from_nanos(h.minimum().unwrap()));
             println!(
                 "p25:   {:?}",
                 Duration::from_nanos(h.percentile(0.25).unwrap())
@@ -195,7 +192,6 @@ fn main() {
                 "p50:   {:?}",
                 Duration::from_nanos(h.percentile(0.50).unwrap())
             );
-            println!("Avg:   {:?}", Duration::from_nanos((total as f64 / num_iters as f64) as u64));
             println!(
                 "p75:   {:?}",
                 Duration::from_nanos(h.percentile(0.75).unwrap())
@@ -216,7 +212,10 @@ fn main() {
                 "p99.9: {:?}",
                 Duration::from_nanos(h.percentile(0.999).unwrap())
             );
+            println!("Min:   {:?}", Duration::from_nanos(h.minimum().unwrap()));
+            println!("Avg:   {:?}", Duration::from_nanos(h.mean().unwrap())); 
             println!("Max:   {:?}", Duration::from_nanos(h.maximum().unwrap()));
+            println!("Stdev: {:?}", Duration::from_nanos(h.stddev().unwrap()));
 
         }
         else {
