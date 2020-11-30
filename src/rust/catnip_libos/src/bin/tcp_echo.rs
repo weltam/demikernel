@@ -124,6 +124,7 @@ fn main() {
         let mut libos = LibOS::new(runtime)?;
 
         if std::env::var("ECHO_SERVER").is_ok() {
+            let num_iters: usize = std::env::var("NUM_ITERS").unwrap().parse().unwrap();
             let listen_addr = &config_obj["server"]["bind"];
             let host_s = listen_addr["host"].as_str().expect("Invalid host");
             let host = Ipv4Addr::from_str(host_s).expect("Invalid host");
@@ -139,13 +140,35 @@ fn main() {
             must_let!(let (_, OperationResult::Accept(fd)) = libos.wait2(qtoken));
             println!("Accepted connection!");
 
-            loop {
+            let mut push_latency = Vec::with_capacity(num_iters);
+            let mut pop_latency = Vec::with_capacity(num_iters);
+
+            for _ in 0..num_iters {
+                let start = Instant::now();
                 let qtoken = libos.pop(fd);
                 must_let!(let (_, OperationResult::Pop(_, buf)) = libos.wait2(qtoken));
+                pop_latency.push(start.elapsed());
 
+                let start = Instant::now();
                 let qtoken = libos.push2(fd, buf);
                 must_let!(let (_, OperationResult::Push) = libos.wait2(qtoken));
+                push_latency.push(start.elapsed());
             }
+
+            let mut push_h = Histogram::configure().precision(4).build().unwrap();
+            for s in push_latency {
+                push_h.increment(s.as_nanos() as u64).unwrap();
+            }
+            let mut pop_h = Histogram::configure().precision(4).build().unwrap();
+            for s in pop_latency {
+                pop_h.increment(s.as_nanos() as u64).unwrap();
+            }
+
+            println!("Push histogram");
+            print_histogram(&push_h);
+
+            println!("\nPop histogram");
+            print_histogram(&pop_h);
         }
         else if std::env::var("ECHO_CLIENT").is_ok() {
             let num_iters: usize = std::env::var("NUM_ITERS").unwrap().parse().unwrap();
@@ -183,44 +206,46 @@ fn main() {
             for s in samples {
                 h.increment(s.as_nanos() as u64).unwrap();
             }
-
-            println!(
-                "p25:   {:?}",
-                Duration::from_nanos(h.percentile(0.25).unwrap())
-            );
-            println!(
-                "p50:   {:?}",
-                Duration::from_nanos(h.percentile(0.50).unwrap())
-            );
-            println!(
-                "p75:   {:?}",
-                Duration::from_nanos(h.percentile(0.75).unwrap())
-            );
-            println!(
-                "p90:   {:?}",
-                Duration::from_nanos(h.percentile(0.90).unwrap())
-            );
-            println!(
-                "p95:   {:?}",
-                Duration::from_nanos(h.percentile(0.95).unwrap())
-            );
-            println!(
-                "p99:   {:?}",
-                Duration::from_nanos(h.percentile(0.99).unwrap())
-            );
-            println!(
-                "p99.9: {:?}",
-                Duration::from_nanos(h.percentile(0.999).unwrap())
-            );
-            println!("Min:   {:?}", Duration::from_nanos(h.minimum().unwrap()));
-            println!("Avg:   {:?}", Duration::from_nanos(h.mean().unwrap())); 
-            println!("Max:   {:?}", Duration::from_nanos(h.maximum().unwrap()));
-            println!("Stdev: {:?}", Duration::from_nanos(h.stddev().unwrap()));
-
+            print_histogram(&h);
         }
         else {
             panic!("Set either ECHO_SERVER or ECHO_CLIENT");
         }
     };
     r.unwrap_or_else(|e| panic!("Initialization failure: {:?}", e));
+}
+
+fn print_histogram(h: &Histogram) {
+    println!(
+        "p25:   {:?}",
+        Duration::from_nanos(h.percentile(0.25).unwrap())
+    );
+    println!(
+        "p50:   {:?}",
+        Duration::from_nanos(h.percentile(0.50).unwrap())
+    );
+    println!(
+        "p75:   {:?}",
+        Duration::from_nanos(h.percentile(0.75).unwrap())
+    );
+    println!(
+        "p90:   {:?}",
+        Duration::from_nanos(h.percentile(0.90).unwrap())
+    );
+    println!(
+        "p95:   {:?}",
+        Duration::from_nanos(h.percentile(0.95).unwrap())
+    );
+    println!(
+        "p99:   {:?}",
+        Duration::from_nanos(h.percentile(0.99).unwrap())
+    );
+    println!(
+        "p99.9: {:?}",
+        Duration::from_nanos(h.percentile(0.999).unwrap())
+    );
+    println!("Min:   {:?}", Duration::from_nanos(h.minimum().unwrap()));
+    println!("Avg:   {:?}", Duration::from_nanos(h.mean().unwrap()));
+    println!("Max:   {:?}", Duration::from_nanos(h.maximum().unwrap()));
+    println!("Stdev: {:?}", Duration::from_nanos(h.stddev().unwrap()));
 }
