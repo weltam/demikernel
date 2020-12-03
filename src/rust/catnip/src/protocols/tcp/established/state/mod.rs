@@ -76,8 +76,7 @@ impl<RT: Runtime> ControlBlock<RT> {
 
     pub fn tcp_header(&self) -> TcpHeader {
         let mut header = TcpHeader::new(self.local.port, self.remote.port);
-        // TODO: Support window scaling here.
-        header.window_size = self.receiver.window_size() as u16;
+        header.window_size = self.receiver.window_size() as u16 >> self.receiver.window_scale;
         if let Some(ack_seq_no) = self.receiver.current_ack() {
             header.ack_num = ack_seq_no;
             header.ack = true;

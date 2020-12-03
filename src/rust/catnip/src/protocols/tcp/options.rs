@@ -19,11 +19,12 @@ pub struct TcpOptions {
 
 impl Default for TcpOptions {
     fn default() -> Self {
+        let receive_window_size = std::env::var("MAX_WINDOW_SIZE").unwrap().parse().unwrap();
         TcpOptions {
             advertised_mss: DEFAULT_MSS,
             handshake_retries: 5,
             handshake_timeout: Duration::from_secs(3),
-            receive_window_size: 0xffff,
+            receive_window_size,
             retries: 5,
             trailing_ack_delay: Duration::from_micros(1),
         }

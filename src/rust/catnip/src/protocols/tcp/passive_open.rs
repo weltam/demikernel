@@ -221,8 +221,10 @@ impl<RT: Runtime> PassiveSocket<RT> {
             }
         }
         mss = std::env::var("MSS").unwrap().parse().unwrap();
-        let window_size = header
-            .window_size
+        window_scale = std::env::var("WINDOW_SCALE").unwrap().parse().unwrap();
+
+        let hdr_window_size = header.window_size as u32;
+        let window_size = hdr_window_size
             .checked_shl(window_scale as u32)
             .expect("TODO: Window size overflow")
             .try_into()

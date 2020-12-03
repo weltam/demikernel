@@ -167,8 +167,8 @@ impl<RT: Runtime> ActiveOpenSocket<RT> {
             }
         }
         mss = std::env::var("MSS").unwrap().parse().unwrap();
-        let window_size = header
-            .window_size
+        window_scale = std::env::var("WINDOW_SCALE").unwrap().parse().unwrap();
+        let window_size = (header.window_size as u32)
             .checked_shl(window_scale as u32)
             .expect("TODO: Window size overflow")
             .try_into()

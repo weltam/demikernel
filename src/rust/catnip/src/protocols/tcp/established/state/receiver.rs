@@ -46,6 +46,7 @@ pub struct Receiver {
     pub ack_deadline: WatchedValue<Option<Instant>>,
 
     pub max_window_size: u32,
+    pub window_scale: u8,
 
     waker: RefCell<Option<Waker>>,
 
@@ -54,6 +55,7 @@ pub struct Receiver {
 
 impl Receiver {
     pub fn new(seq_no: SeqNumber, max_window_size: u32) -> Self {
+        let window_scale = std::env::var("WINDOW_SCALE").unwrap().parse().unwrap();
         Self {
             state: WatchedValue::new(ReceiverState::Open),
             base_seq_no: WatchedValue::new(seq_no),
@@ -64,6 +66,7 @@ impl Receiver {
             max_window_size,
             waker: RefCell::new(None),
             out_of_order: RefCell::new(BTreeMap::new()),
+            window_scale,
         }
     }
 
@@ -176,7 +179,7 @@ impl Receiver {
                     }
                 }
                 out_of_order.insert(seq_no, buf);
-                return Err(Fail::Ignored { 
+                return Err(Fail::Ignored {
                     details: "Out of order segment (reordered)",
                 });
             } else {
