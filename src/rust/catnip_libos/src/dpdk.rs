@@ -1,5 +1,7 @@
 use hashbrown::HashMap;
 use dpdk_rs::{
+    rte_eth_dev_get_mtu,
+    rte_eth_dev_set_mtu,
     rte_delay_us_block,
     rte_eal_init,
     rte_eth_conf,
@@ -34,6 +36,10 @@ use dpdk_rs::{
     RTE_ETH_DEV_NO_OWNER,
     RTE_MAX_ETHPORTS,
     RTE_MBUF_DEFAULT_BUF_SIZE,
+    RTE_ETHER_MAX_JUMBO_FRAME_LEN,
+    DEV_RX_OFFLOAD_JUMBO_FRAME,
+    RTE_PKTMBUF_HEADROOM,
+    DEV_RX_OFFLOAD_TIMESTAMP,
 };
 use crate::{
     runtime::DPDKRuntime,
@@ -69,7 +75,7 @@ pub fn initialize_dpdk(
     arp_table: HashMap<MacAddress, Ipv4Addr>,
     disable_arp: bool,
 ) -> Result<DPDKRuntime, Error> {
-    std::env::set_var("MLX5_SHUT_UP_BF", "1");
+    // std::env::set_var("MLX5_SHUT_UP_BF", "1");
     let eal_init_refs = eal_init_args
         .iter()
         .map(|s| s.as_ptr() as *mut u8)
@@ -95,7 +101,8 @@ pub fn initialize_dpdk(
             (num_mbufs * nb_ports) as u32,
             mbuf_cache_size,
             0,
-            RTE_MBUF_DEFAULT_BUF_SIZE as u16,
+            (RTE_ETHER_MAX_JUMBO_FRAME_LEN + RTE_PKTMBUF_HEADROOM) as u16,
+            // RTE_MBUF_DEFAULT_BUF_SIZE as u16,
             rte_socket_id() as i32,
         )
     };
@@ -148,8 +155,8 @@ fn initialize_dpdk_port(port_id: u16, mbuf_pool: *mut rte_mempool) -> Result<(),
     let nb_rxd = rx_ring_size;
     let nb_txd = tx_ring_size;
 
-    let rx_pthresh = 0;
-    let rx_hthresh = 0;
+    let rx_pthresh = 8;
+    let rx_hthresh = 8;
     let rx_wthresh = 0;
 
     let tx_pthresh = 0;
@@ -161,11 +168,22 @@ fn initialize_dpdk_port(port_id: u16, mbuf_pool: *mut rte_mempool) -> Result<(),
         rte_eth_dev_info_get(port_id, d.as_mut_ptr());
         d.assume_init()
     };
+    println!("dev_info: {:?}", dev_info);
+    let mtu: u16 = std::env::var("MTU").unwrap().parse().unwrap();
+    unsafe {
+        // expect_zero!(rte_eth_dev_set_mtu(port_id, RTE_ETHER_MAX_JUMBO_FRAME_LEN as u16))?;
+        expect_zero!(rte_eth_dev_set_mtu(port_id, mtu))?;
+        let mut mtu = 0u16;
+        expect_zero!(rte_eth_dev_get_mtu(port_id, &mut mtu as *mut _))?;
+        println!("DPDK MTU: {}", mtu);
+    }
 
     let mut port_conf: rte_eth_conf = unsafe { MaybeUninit::zeroed().assume_init() };
-    port_conf.rxmode.max_rx_pkt_len = RTE_ETHER_MAX_LEN;
-    port_conf.rxmode.mq_mode = ETH_MQ_RX_RSS;
-    port_conf.rx_adv_conf.rss_conf.rss_hf = ETH_RSS_IP as u64 | dev_info.flow_type_rss_offloads;
+    port_conf.rxmode.max_rx_pkt_len = RTE_ETHER_MAX_JUMBO_FRAME_LEN;
+    // port_conf.rxmode.max_rx_pkt_len = RTE_ETHER_MAX_LEN;
+    port_conf.rxmode.offloads = DEV_RX_OFFLOAD_JUMBO_FRAME as u64 | DEV_RX_OFFLOAD_TIMESTAMP as u64;
+    // port_conf.rxmode.mq_mode = ETH_MQ_RX_RSS;
+    // port_conf.rx_adv_conf.rss_conf.rss_hf = ETH_RSS_IP as u64 | dev_info.flow_type_rss_offloads;
     port_conf.txmode.mq_mode = ETH_MQ_TX_NONE;
 
     let mut rx_conf: rte_eth_rxconf = unsafe { MaybeUninit::zeroed().assume_init() };
@@ -178,7 +196,7 @@ fn initialize_dpdk_port(port_id: u16, mbuf_pool: *mut rte_mempool) -> Result<(),
     tx_conf.tx_thresh.pthresh = tx_pthresh;
     tx_conf.tx_thresh.hthresh = tx_hthresh;
     tx_conf.tx_thresh.wthresh = tx_wthresh;
-    tx_conf.tx_free_thresh = 32;
+    // tx_conf.tx_free_thresh = 32;
 
     unsafe {
         expect_zero!(rte_eth_dev_configure(

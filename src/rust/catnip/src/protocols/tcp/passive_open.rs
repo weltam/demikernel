@@ -220,6 +220,7 @@ impl<RT: Runtime> PassiveSocket<RT> {
                 _ => continue,
             }
         }
+        mss = std::env::var("MSS").unwrap().parse().unwrap();
         let window_size = header
             .window_size
             .checked_shl(window_scale as u32)

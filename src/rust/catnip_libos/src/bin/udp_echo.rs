@@ -122,7 +122,6 @@ fn main() {
         )?;
         logging::initialize();
         let mut libos = LibOS::new(runtime)?;
-        let buf_sz: usize = std::env::var("BUFFER_SIZE").unwrap().parse().unwrap();
 
         if std::env::var("ECHO_SERVER").is_ok() {
             let num_iters: usize = std::env::var("NUM_ITERS").unwrap().parse().unwrap();
@@ -133,39 +132,31 @@ fn main() {
             let port = ip::Port::try_from(port_i as u16)?;
             let endpoint = Endpoint::new(host, port);
 
-            let sockfd = libos.socket(libc::AF_INET, libc::SOCK_STREAM, 0)?;
-            libos.bind(sockfd, endpoint)?;
-            libos.listen(sockfd, 10)?;
+            let client_addr = &config_obj["server"]["client"];
+            let host_s = client_addr["host"].as_str().expect("Invalid host");
+            let host = Ipv4Addr::from_str(host_s).expect("Invalid host");
+            let port_i = client_addr["port"].as_i64().expect("Invalid port");
+            let port = ip::Port::try_from(port_i as u16)?;
+            let client_addr = Endpoint::new(host, port);
 
-            let qtoken = libos.accept(sockfd);
-            must_let!(let (_, OperationResult::Accept(fd)) = libos.wait2(qtoken));
-            println!("Accepted connection!");
+            let sockfd = libos.socket(libc::AF_INET, libc::SOCK_DGRAM, 0)?;
+            libos.bind(sockfd, endpoint)?;
+            let qtoken = libos.connect(sockfd, client_addr);
+            must_let!(let (_, OperationResult::Connect) = libos.wait2(qtoken));
 
             let mut push_latency = Vec::with_capacity(num_iters);
             let mut pop_latency = Vec::with_capacity(num_iters);
 
-            let mut scratch = Vec::with_capacity(buf_sz);
-
-            for i in 0..num_iters {
-                println!("Round {}", i);
-                scratch.clear();
-
-                while scratch.len() < buf_sz {
-                    let start = Instant::now();
-                    let qtoken = libos.pop(fd);
-                    pop_latency.push(start.elapsed());
-                    must_let!(let (_, OperationResult::Pop(_, buf)) = libos.wait2(qtoken));
-                    scratch.extend(&buf[..]);
-                }
-                assert_eq!(scratch.len(), buf_sz);
-                let buf = BytesMut::from(&scratch[..]).freeze();
-                println!("Done popping");
+            for _ in 0..num_iters {
+                let start = Instant::now();
+                let qtoken = libos.pop(sockfd);
+                pop_latency.push(start.elapsed());
+                must_let!(let (_, OperationResult::Pop(_, buf)) = libos.wait2(qtoken));
 
                 let start = Instant::now();
-                let qtoken = libos.push2(fd, buf);
+                let qtoken = libos.push2(sockfd, buf);
                 push_latency.push(start.elapsed());
                 must_let!(let (_, OperationResult::Push) = libos.wait2(qtoken));
-                println!("Done pushing");
             }
 
             let mut push_h = Histogram::configure().precision(4).build().unwrap();
@@ -185,16 +176,25 @@ fn main() {
         }
         else if std::env::var("ECHO_CLIENT").is_ok() {
             let num_iters: usize = std::env::var("NUM_ITERS").unwrap().parse().unwrap();
+            let buf_sz: usize = std::env::var("BUFFER_SIZE").unwrap().parse().unwrap();
 
             let connect_addr = &config_obj["client"]["connect_to"];
             let host_s = connect_addr["host"].as_str().expect("Invalid host");
             let host = Ipv4Addr::from_str(host_s).expect("Invalid host");
             let port_i = connect_addr["port"].as_i64().expect("Invalid port");
             let port = ip::Port::try_from(port_i as u16)?;
-            let endpoint = Endpoint::new(host, port);
+            let connect_addr = Endpoint::new(host, port);
 
-            let sockfd = libos.socket(libc::AF_INET, libc::SOCK_STREAM, 0)?;
-            let qtoken = libos.connect(sockfd, endpoint);
+            let client_addr = &config_obj["client"]["client"];
+            let host_s = client_addr["host"].as_str().expect("Invalid host");
+            let host = Ipv4Addr::from_str(host_s).expect("Invalid host");
+            let port_i = client_addr["port"].as_i64().expect("Invalid port");
+            let port = ip::Port::try_from(port_i as u16)?;
+            let client_addr = Endpoint::new(host, port);
+
+            let sockfd = libos.socket(libc::AF_INET, libc::SOCK_DGRAM, 0)?;
+            libos.bind(sockfd, client_addr)?;
+            let qtoken = libos.connect(sockfd, connect_addr);
             must_let!(let (_, OperationResult::Connect) = libos.wait2(qtoken));
 
             let mut buf = BytesMut::zeroed(buf_sz);
@@ -205,26 +205,19 @@ fn main() {
 
             let exp_start = Instant::now();
             let mut samples = Vec::with_capacity(num_iters);
-            for i in 0..num_iters {
-                println!("Round {}", i);
+            for _ in 0..num_iters {
                 let start = Instant::now();
                 let qtoken = libos.push2(sockfd, buf.clone());
                 must_let!(let (_, OperationResult::Push) = libos.wait2(qtoken));
-                println!("Done pushing");
 
-                let mut bytes_popped = 0;
-                while bytes_popped < buf_sz {
-                    let qtoken = libos.pop(sockfd);
-                    must_let!(let (_, OperationResult::Pop(_, popped_buf)) = libos.wait2(qtoken));
-                    bytes_popped += popped_buf.len();
-                }
-                assert_eq!(bytes_popped, buf_sz);
+                let qtoken = libos.pop(sockfd);
+                must_let!(let (_, OperationResult::Pop(..)) = libos.wait2(qtoken));
                 samples.push(start.elapsed());
-                println!("Done popping");
             }
             let exp_duration = exp_start.elapsed();
             let throughput = (num_iters as f64 * buf_sz as f64) / exp_duration.as_secs_f64() / 1024. / 1024. / 1024. * 8.;
-            println!("Finished ({} samples, {} Gbps throughput)", num_iters, throughput);
+
+            println!("Finished ({} samples, {} Gbps)", num_iters, throughput);
             let mut h = Histogram::configure().precision(4).build().unwrap();
             for s in &samples[2..] {
                 h.increment(s.as_nanos() as u64).unwrap();

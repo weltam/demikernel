@@ -113,7 +113,7 @@ impl Sender {
         let Wrapping(sent_data) = sent_seq - base_seq;
 
         // Fast path: Try to send the data immediately.
-        if win_sz > 0 && win_sz >= sent_data + buf_len {
+        if win_sz > 0 && win_sz >= sent_data + buf_len && buf.len() <= self.mss {
             if let Some(remote_link_addr) = cb.arp.try_query(cb.remote.address()) {
                 let mut header = cb.tcp_header();
                 header.seq_num = sent_seq;
