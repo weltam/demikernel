@@ -6,7 +6,7 @@ use crate::{
 };
 use std::{
     cell::RefCell,
-    collections::VecDeque,
+    collections::{VecDeque, BTreeMap},
     num::Wrapping,
     task::{
         Context,
@@ -25,6 +25,8 @@ pub enum ReceiverState {
     ReceivedFin,
     AckdFin,
 }
+
+const MAX_OUT_OF_ORDER: usize = 16;
 
 #[derive(Debug)]
 pub struct Receiver {
@@ -46,6 +48,8 @@ pub struct Receiver {
     pub max_window_size: u32,
 
     waker: RefCell<Option<Waker>>,
+
+    out_of_order: RefCell<BTreeMap<SeqNumber, Bytes>>,
 }
 
 impl Receiver {
@@ -59,6 +63,7 @@ impl Receiver {
             ack_deadline: WatchedValue::new(None),
             max_window_size,
             waker: RefCell::new(None),
+            out_of_order: RefCell::new(BTreeMap::new()),
         }
     }
 
@@ -160,10 +165,25 @@ impl Receiver {
             });
         }
 
-        if self.recv_seq_no.get() != seq_no {
-            return Err(Fail::Ignored {
-                details: "Out of order segment",
-            });
+        let recv_seq_no = self.recv_seq_no.get();
+        if recv_seq_no != seq_no {
+            if seq_no > recv_seq_no {
+                let mut out_of_order = self.out_of_order.borrow_mut();
+                if !out_of_order.contains_key(&seq_no) {
+                    while out_of_order.len() > MAX_OUT_OF_ORDER {
+                        let (&key, _) = out_of_order.iter().rev().next().unwrap();
+                        out_of_order.remove(&key);
+                    }
+                }
+                out_of_order.insert(seq_no, buf);
+                return Err(Fail::Ignored { 
+                    details: "Out of order segment (reordered)",
+                });
+            } else {
+                return Err(Fail::Ignored {
+                    details: "Out of order segment (duplicate)",
+                });
+            }
         }
 
         let unread_bytes = self
@@ -187,6 +207,18 @@ impl Receiver {
             // TODO: Configure this value (and also maybe just have an RT pointer here.)
             self.ack_deadline
                 .set(Some(now + Duration::from_millis(500)));
+        }
+
+        let new_recv_seq_no = self.recv_seq_no.get();
+        let old_data = {
+            let mut out_of_order = self.out_of_order.borrow_mut();
+            out_of_order.remove(&new_recv_seq_no)
+        };
+        if let Some(old_data) = old_data {
+            warn!("Recovering out-of-order packet at {}", new_recv_seq_no);
+            if let Err(e) = self.receive_data(new_recv_seq_no, old_data, now) {
+                warn!("Failed to recover out-of-order packet: {:?}", e);
+            }
         }
 
         Ok(())
