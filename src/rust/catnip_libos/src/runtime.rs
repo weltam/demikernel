@@ -156,7 +156,9 @@ impl Runtime for DPDKRuntime {
     fn transmit(&self, buf: impl PacketBuf) {
         let pool = { self.inner.borrow().dpdk_mempool };
         let dpdk_port_id = { self.inner.borrow().dpdk_port_id };
+        // catnip::tracing::log("pktmbuf_alloc:start");
         let mut pkt = unsafe { rte_pktmbuf_alloc(pool) };
+        // catnip::tracing::log("pktmbuf_alloc:end");
         assert!(!pkt.is_null());
 
         let size = buf.compute_size();
@@ -167,9 +169,11 @@ impl Runtime for DPDKRuntime {
 
         {
             // let _t = tracy_client::static_span!("serialize");
+            // catnip::tracing::log("transmit_serialize:start");
             let out_ptr = unsafe { ((*pkt).buf_addr as *mut u8).offset((*pkt).data_off as isize) };
             let out_slice = unsafe { slice::from_raw_parts_mut(out_ptr, buf_len as usize) };
             buf.serialize(&mut out_slice[..size]);
+            // catnip::tracing::log("transmit_serialize:end");
             if let Some(buf) = buf.take_buf() {
                 self.donate_buffer(buf);
             }
@@ -180,8 +184,10 @@ impl Runtime for DPDKRuntime {
             (*pkt).nb_segs = 1;
             (*pkt).next = ptr::null_mut();
 
+            // catnip::tracing::log("tx_burst:start");
             rte_eth_tx_burst(dpdk_port_id, 0, &mut pkt as *mut _, 1)
         };
+        // catnip::tracing::log("tx_burst:end");
         assert_eq!(num_sent, 1);
     }
 

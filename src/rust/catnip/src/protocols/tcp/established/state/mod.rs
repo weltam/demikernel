@@ -88,7 +88,9 @@ impl<RT: Runtime> ControlBlock<RT> {
 
     pub fn emit(&self, header: TcpHeader, data: Bytes, remote_link_addr: MacAddress) {
         if header.ack {
+            // crate::tracing::log("ack_sent:start");
             self.receiver.ack_sent(header.ack_num);
+            // crate::tracing::log("ack_sent:end");
         }
         trace!("Sending segment: {:?}, {} bytes", header, data.len());
         let segment = TcpSegment {
@@ -101,7 +103,9 @@ impl<RT: Runtime> ControlBlock<RT> {
             tcp_hdr: header,
             data,
         };
+        // crate::tracing::log("transmit:start");
         self.rt.transmit(segment);
+        // crate::tracing::log("transmit:end");
     }
 
     pub fn remote_mss(&self) -> usize {

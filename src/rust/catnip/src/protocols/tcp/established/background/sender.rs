@@ -94,6 +94,7 @@ pub async fn sender<RT: Runtime>(cb: Rc<ControlBlock<RT>>) -> Result<!, Fail> {
         let remote_link_addr = cb.arp.query(cb.remote.address()).await?;
 
         // Form an outgoing packet.
+        // crate::tracing::log("after_arp:start");
         let max_size = cmp::min((win_sz - sent_data) as usize, cb.sender.mss);
         let segment_data = cb
             .sender
@@ -106,7 +107,9 @@ pub async fn sender<RT: Runtime>(cb: Rc<ControlBlock<RT>>) -> Result<!, Fail> {
 
         let mut header = cb.tcp_header();
         header.seq_num = sent_seq;
+        // crate::tracing::log("emit:start");
         cb.emit(header, segment_data.clone(), remote_link_addr);
+        // crate::tracing::log("emit:end");
 
         cb.sender
             .sent_seq_no
@@ -124,5 +127,6 @@ pub async fn sender<RT: Runtime>(cb: Rc<ControlBlock<RT>>) -> Result<!, Fail> {
             let rto = cb.sender.rto.borrow().estimate();
             cb.sender.retransmit_deadline.set(Some(cb.rt.now() + rto));
         }
+        // crate::tracing::log("after_arp:end");
     }
 }

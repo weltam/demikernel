@@ -60,31 +60,41 @@ impl PacketBuf for TcpSegment {
         let tcp_hdr_size = self.tcp_hdr.compute_size();
         let mut cur_pos = 0;
 
+        // crate::tracing::log("ethernet2:start");
         self.ethernet2_hdr
             .serialize(&mut buf[cur_pos..(cur_pos + eth_hdr_size)]);
         cur_pos += eth_hdr_size;
+        // crate::tracing::log("ethernet2:end");
 
+        // crate::tracing::log("ipv4:start");
         let ipv4_payload_len = tcp_hdr_size + self.data.len();
         self.ipv4_hdr.serialize(
             &mut buf[cur_pos..(cur_pos + ipv4_hdr_size)],
             ipv4_payload_len,
         );
         cur_pos += ipv4_hdr_size;
+        // crate::tracing::log("ipv4:end");
 
+        // crate::tracing::log("tcp:start");
         self.tcp_hdr.serialize(
             &mut buf[cur_pos..(cur_pos + tcp_hdr_size)],
             &self.ipv4_hdr,
             &self.data[..],
         );
         cur_pos += tcp_hdr_size;
+        // crate::tracing::log("tcp:end");
 
+        // crate::tracing::log("body:start");
         buf[cur_pos..(cur_pos + self.data.len())].copy_from_slice(&self.data[..]);
         cur_pos += self.data.len();
+        // crate::tracing::log("body:end");
 
+        // crate::tracing::log("padding:start");
         // Add Ethernet padding if needed.
         for byte in &mut buf[cur_pos..] {
             *byte = 0;
         }
+        // crate::tracing::log("padding:end");
     }
 
     fn take_buf(self) -> Option<Bytes> {

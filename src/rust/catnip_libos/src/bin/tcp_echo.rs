@@ -130,8 +130,10 @@ fn main() {
         let buf_sz: usize = std::env::var("BUFFER_SIZE").unwrap().parse().unwrap();
 
         let log_round = std::env::var("LOG_ROUND").is_ok();
+        let mut is_server = false;
 
         if std::env::var("ECHO_SERVER").is_ok() {
+            is_server = true;
             let num_iters: usize = std::env::var("NUM_ITERS").unwrap().parse().unwrap();
             let listen_addr = &config_obj["server"]["bind"];
             let host_s = listen_addr["host"].as_str().expect("Invalid host");
@@ -154,7 +156,7 @@ fn main() {
             let mut push_tokens = Vec::with_capacity(buf_sz / 1000 + 1);
 
             for i in 0..num_iters {
-                tracing::log("round:start");
+                // tracing::log("round:start");
 
                 if log_round {
                     println!("Round {}", i);
@@ -163,21 +165,29 @@ fn main() {
 
                 while bytes_received < buf_sz {
                     let start = Instant::now();
+                    // tracing::log("pop:start");
                     let qtoken = libos.pop(fd);
+                    // tracing::log("pop:end");
                     pop_latency.push(start.elapsed());
+                    // tracing::log("wait2:start");
                     must_let!(let (_, OperationResult::Pop(_, buf)) = libos.wait2(qtoken));
+                    // tracing::log("wait2:end");
                     bytes_received += buf.len();
 
                     let start = Instant::now();
+                    // tracing::log("push2:start");
                     let qtoken = libos.push2(fd, buf);
+                    // tracing::log("push2:end");
                     push_latency.push(start.elapsed());
                     push_tokens.push(qtoken);
                 }
                 assert_eq!(bytes_received, buf_sz);
+                // tracing::log("wait_all_pushes:start");
                 libos.wait_all_pushes(&mut push_tokens);
+                // tracing::log("wait_all_pushes:end");
                 assert_eq!(push_tokens.len(), 0);
 
-                tracing::log("round:end");
+                // tracing::log("round:end");
             }
 
             let mut push_h = Histogram::configure().precision(4).build().unwrap();
@@ -218,21 +228,29 @@ fn main() {
             let exp_start = Instant::now();
             let mut samples = Vec::with_capacity(num_iters);
             for i in 0..num_iters {
-                tracing::log("round:start");
+                // tracing::log("round:start");
                 if log_round {
                     println!("Round {}", i);
                 }
                 let start = Instant::now();
+                // tracing::log("push2:start");
                 let qtoken = libos.push2(sockfd, buf.clone());
-                must_let!(let (_, OperationResult::Push) = libos.wait2(qtoken));
+                // tracing::log("push2:end");
+                tracing::log("push_wait3:start");
+                must_let!(let (_, OperationResult::Push) = libos.wait3(qtoken));
+                tracing::log("push_wait3:end");
                 if log_round {
                     println!("Done pushing");
                 }
 
                 let mut bytes_popped = 0;
                 while bytes_popped < buf_sz {
+                    // tracing::log("pop:start");
                     let qtoken = libos.pop(sockfd);
+                    // tracing::log("pop:end");
+                    // tracing::log("pop_wait2:start");
                     must_let!(let (_, OperationResult::Pop(_, popped_buf)) = libos.wait2(qtoken));
+                    // tracing::log("pop_wait2:end");
                     bytes_popped += popped_buf.len();
                     libos.rt().donate_buffer(popped_buf);
                 }
@@ -241,7 +259,7 @@ fn main() {
                 if log_round {
                     println!("Done popping");
                 }
-                tracing::log("round:end");
+                // tracing::log("round:end");
             }
             let exp_duration = exp_start.elapsed();
             let throughput = (num_iters as f64 * buf_sz as f64) / exp_duration.as_secs_f64() / 1024. / 1024. / 1024. * 8.;
@@ -258,9 +276,10 @@ fn main() {
 
         let (events, num_overflow) = tracing::dump();
         println!("Dropped {} tracing events", num_overflow);
-        let mut f = std::io::BufWriter::new(std::fs::File::open("events.log"));
+        let filename = format!("events_{}.log", if is_server { "server" } else { "client" });
+        let mut f = std::io::BufWriter::new(std::fs::File::create(&filename).unwrap());
         for (name, ts) in events {
-            write!(f, "{} {}", name, ts);
+            writeln!(f, "{} {}", name, ts).unwrap();
         }
         drop(f);
 

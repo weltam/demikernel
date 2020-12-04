@@ -84,9 +84,9 @@ impl Sender {
             state: WatchedValue::new(SenderState::Open),
 
             base_seq_no: WatchedValue::new(seq_no),
-            unacked_queue: RefCell::new(VecDeque::new()),
+            unacked_queue: RefCell::new(VecDeque::with_capacity(1024)),
             sent_seq_no: WatchedValue::new(seq_no),
-            unsent_queue: RefCell::new(VecDeque::new()),
+            unsent_queue: RefCell::new(VecDeque::with_capacity(1024)),
             unsent_seq_no: WatchedValue::new(seq_no),
 
             window_size: WatchedValue::new(window_size),

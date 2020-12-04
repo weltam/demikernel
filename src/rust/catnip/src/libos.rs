@@ -201,6 +201,44 @@ impl<RT: Runtime> LibOS<RT> {
         }
     }
 
+    pub fn wait3(&mut self, qt: QToken) -> (FileDescriptor, OperationResult) {
+        let handle = self.rt.scheduler().from_raw_handle(qt).unwrap();
+        loop {
+            // crate::tracing::log("scheduler:start");
+            self.rt.scheduler().poll();
+            // crate::tracing::log("scheduler:end");
+            if handle.has_completed() {
+                return self.take_operation2(handle);
+            }
+            let mut num_received = 0;
+            loop {
+                // crate::tracing::log("rt_receive:start");
+                let pkt = self.rt.receive();
+                // crate::tracing::log("rt_receive:end");
+                let pkt = match pkt {
+                    Some(p) => p,
+                    None => break,
+                };
+                num_received += 1;
+                // crate::tracing::log("engine_receive:start");
+                if let Err(e) = self.engine.receive(pkt) {
+                    warn!("Dropped packet: {:?}", e);
+                }
+                // crate::tracing::log("engine_receive:end");
+                if num_received > MAX_RECV_ITER {
+                    break;
+                }
+            }
+            if self.ts_iters == 0 {
+                // let _t = tracy_client::static_span!("advance_clock");
+                // crate::tracing::log("advance_clock:start");
+                self.rt.advance_clock(Instant::now());
+                // crate::tracing::log("advance_clock:end");
+            }
+            self.ts_iters = (self.ts_iters + 1) % TIMER_RESOLUTION;
+        }
+    }
+
     pub fn wait_any(&mut self, qts: &[QToken]) -> (usize, dmtr_qresult_t) {
         // let _s = tracy_client::static_span!();
         loop {
