@@ -1,10 +1,10 @@
 [profile.release]
-lto = true
+lto = "thin"
 overflow-checks = true
 debug = true
 
 [profile.bench]
-lto = true
+lto = "thin"
 overflow-checks = true
 debug = true
 

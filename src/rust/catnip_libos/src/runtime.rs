@@ -147,7 +147,7 @@ struct Inner {
 
 #[inline(never)]
 fn noop_span_log() {
-    let _s = tracy_client::static_span!();
+    // let _s = tracy_client::static_span!();
 }
 
 impl Runtime for DPDKRuntime {
@@ -166,7 +166,7 @@ impl Runtime for DPDKRuntime {
         assert!(buf_len as usize >= size);
 
         {
-            let _t = tracy_client::static_span!("serialize");
+            // let _t = tracy_client::static_span!("serialize");
             let out_ptr = unsafe { ((*pkt).buf_addr as *mut u8).offset((*pkt).data_off as isize) };
             let out_slice = unsafe { slice::from_raw_parts_mut(out_ptr, buf_len as usize) };
             buf.serialize(&mut out_slice[..size]);

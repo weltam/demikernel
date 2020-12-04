@@ -20,10 +20,10 @@ dpdk-rs = { git = "https://github.com/sujayakar/dpdk-rs", rev = "66d2b6058dc0479
 must-let = { git = "https://github.com/sujayakar/must-let" }
 histogram = "0.6.9"
 
-[dependencies.tracy-client]
-path = "../rust_tracy_client/tracy-client"
-default-features = false
-features = ["enable"]
+# [dependencies.tracy-client]
+# path = "../rust_tracy_client/tracy-client"
+# default-features = false
+# features = ["enable"]
 
 [build-dependencies]
 bindgen = "0.55.1"

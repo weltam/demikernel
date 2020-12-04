@@ -46,28 +46,27 @@ pub mod timer;
 // static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 use std::alloc;
-use tracy_client::static_span;
 
 pub struct ProfiledAllocator<T>(T);
 
 unsafe impl<T: alloc::GlobalAlloc> alloc::GlobalAlloc for ProfiledAllocator<T> {
     unsafe fn alloc(&self, layout: alloc::Layout) -> *mut u8 {
-        // let _s = static_span!();
+        // let _s = tracy_client::static_span!();
         self.0.alloc(layout)
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: alloc::Layout) {
-        // let _s = static_span!();
+        // let _s = tracy_client::static_span!();
         self.0.dealloc(ptr, layout)
     }
 
     unsafe fn alloc_zeroed(&self, layout: alloc::Layout) -> *mut u8 {
-        // let _s = static_span!();
+        // let _s = tracy_client::static_span!();
         self.0.alloc_zeroed(layout)
     }
 
     unsafe fn realloc(&self, ptr: *mut u8, layout: alloc::Layout, new_size: usize) -> *mut u8 {
-        // let _s = static_span!();
+        // let _s = tracy_client::static_span!();
         self.0.realloc(ptr, layout, new_size)
     }
 }

@@ -30,7 +30,6 @@ use std::{
         Instant,
     },
 };
-use tracy_client::static_span;
 
 pub fn one_send_recv_round(
     ctx: &mut Context,
@@ -40,7 +39,7 @@ pub fn one_send_recv_round(
     bob: &mut test_helpers::TestEngine,
     bob_fd: FileDescriptor,
 ) {
-    let _s = static_span!("tcp_round");
+    let _s = tracy_client::static_span!("tcp_round");
 
     // Send data from Alice to Bob
     let mut push_future = alice.tcp_push(alice_fd, buf.clone());

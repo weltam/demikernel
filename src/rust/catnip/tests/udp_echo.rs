@@ -1,7 +1,6 @@
 #![feature(const_fn, const_panic, const_alloc_layout)]
 #![feature(const_mut_refs, const_type_name)]
 
-use tracy_client::static_span;
 use catnip::{
     interop::{
         dmtr_opcode_t,
@@ -119,7 +118,7 @@ impl Runtime for TestRuntime {
     type WaitFuture = catnip::timer::WaitFuture<TimerRc>;
 
     fn transmit(&self, pkt: impl PacketBuf) {
-        // let _s = static_span!();
+        // let _s = tracy_client::static_span!();
         let size = pkt.compute_size();
         let mut buf = BytesMut::zeroed(size);
         pkt.serialize(&mut buf[..]);
@@ -131,7 +130,7 @@ impl Runtime for TestRuntime {
     }
 
     fn receive(&self) -> Option<Bytes> {
-        // let _s = static_span!();
+        // let _s = tracy_client::static_span!();
         self.inner.borrow_mut().incoming.try_recv().ok()
     }
 
