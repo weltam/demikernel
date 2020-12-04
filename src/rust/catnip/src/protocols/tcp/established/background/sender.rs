@@ -102,6 +102,8 @@ pub async fn sender<RT: Runtime>(cb: Rc<ControlBlock<RT>>) -> Result<!, Fail> {
         let segment_data_len = segment_data.len();
         assert!(segment_data_len > 0);
 
+        trace!("Sending base_seq {}, sent_seq {}, window_sz {}, num_bytes {}", base_seq, sent_seq, win_sz, segment_data_len);
+
         let mut header = cb.tcp_header();
         header.seq_num = sent_seq;
         cb.emit(header, segment_data.clone(), remote_link_addr);

@@ -174,10 +174,12 @@ impl<RT: Runtime> ActiveOpenSocket<RT> {
             .try_into()
             .expect("TODO: Window size overflow");
 
+        trace!("Initializing window_sz {} scale {}", window_size, window_scale);
+
         let sender = Sender::new(expected_seq, window_size, window_scale, mss);
         let receiver = Receiver::new(
             remote_seq_num,
-            self.rt.tcp_options().receive_window_size as u32,
+            (self.rt.tcp_options().receive_window_size as u32) << window_scale,
         );
         let cb = ControlBlock {
             local: self.local.clone(),
@@ -200,7 +202,7 @@ impl<RT: Runtime> ActiveOpenSocket<RT> {
     ) -> impl Future<Output = ()> {
         let handshake_retries = 3usize;
         let handshake_timeout = Duration::from_secs(5);
-        let max_window_size = 1024;
+        let max_window_size = rt.tcp_options().receive_window_size as u16;
 
         async move {
             for _ in 0..handshake_retries {

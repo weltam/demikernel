@@ -124,6 +124,8 @@ fn main() {
         let mut libos = LibOS::new(runtime)?;
         let buf_sz: usize = std::env::var("BUFFER_SIZE").unwrap().parse().unwrap();
 
+        let log_round = std::env::var("LOG_ROUND").is_ok();
+
         if std::env::var("ECHO_SERVER").is_ok() {
             let num_iters: usize = std::env::var("NUM_ITERS").unwrap().parse().unwrap();
             let listen_addr = &config_obj["server"]["bind"];
@@ -147,7 +149,9 @@ fn main() {
             let mut scratch = Vec::with_capacity(buf_sz);
 
             for i in 0..num_iters {
-                // println!("Round {}", i);
+                if log_round {
+                    println!("Round {}", i);
+                }
                 scratch.clear();
 
                 while scratch.len() < buf_sz {
@@ -159,13 +163,17 @@ fn main() {
                 }
                 assert_eq!(scratch.len(), buf_sz);
                 let buf = BytesMut::from(&scratch[..]).freeze();
-                // println!("Done popping");
+                if log_round {
+                    println!("Done popping");
+                }
 
                 let start = Instant::now();
                 let qtoken = libos.push2(fd, buf);
                 push_latency.push(start.elapsed());
                 must_let!(let (_, OperationResult::Push) = libos.wait2(qtoken));
-                // println!("Done pushing");
+                if log_round {
+                    println!("Done pushing");
+                }
             }
 
             let mut push_h = Histogram::configure().precision(4).build().unwrap();
@@ -206,11 +214,15 @@ fn main() {
             let exp_start = Instant::now();
             let mut samples = Vec::with_capacity(num_iters);
             for i in 0..num_iters {
-                // println!("Round {}", i);
+                if log_round {
+                    println!("Round {}", i);
+                }
                 let start = Instant::now();
                 let qtoken = libos.push2(sockfd, buf.clone());
                 must_let!(let (_, OperationResult::Push) = libos.wait2(qtoken));
-                // println!("Done pushing");
+                if log_round {
+                    println!("Done pushing");
+                }
 
                 let mut bytes_popped = 0;
                 while bytes_popped < buf_sz {
@@ -220,7 +232,9 @@ fn main() {
                 }
                 assert_eq!(bytes_popped, buf_sz);
                 samples.push(start.elapsed());
-                // println!("Done popping");
+                if log_round {
+                    println!("Done popping");
+                }
             }
             let exp_duration = exp_start.elapsed();
             let throughput = (num_iters as f64 * buf_sz as f64) / exp_duration.as_secs_f64() / 1024. / 1024. / 1024. * 8.;

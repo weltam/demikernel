@@ -444,6 +444,7 @@ impl<RT: Runtime> Inner<RT> {
     }
 
     fn receive(&mut self, ip_hdr: &Ipv4Header, buf: Bytes) -> Result<(), Fail> {
+        let _s = tracy_client::static_span!();
         let (tcp_hdr, data) = TcpHeader::parse(ip_hdr, buf)?;
         let local = ipv4::Endpoint::new(ip_hdr.dst_addr, tcp_hdr.dst_port);
         let remote = ipv4::Endpoint::new(ip_hdr.src_addr, tcp_hdr.src_port);

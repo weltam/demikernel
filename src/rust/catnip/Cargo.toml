@@ -35,7 +35,7 @@ uniset = "0.2.0"
 [dependencies.tracy-client]
 path = "../rust_tracy_client/tracy-client"
 default-features = false
-features = []
+features = ["enable"]
 
 [dev-dependencies]
 criterion = "0.3.3"

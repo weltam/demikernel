@@ -1,6 +1,7 @@
 #![allow(non_camel_case_types, unused)]
 #![feature(maybe_uninit_uninit_array)]
 #![feature(try_blocks)]
+#![feature(const_fn, const_type_name, const_mut_refs)]
 
 use catnip::{
     file_table::FileDescriptor,

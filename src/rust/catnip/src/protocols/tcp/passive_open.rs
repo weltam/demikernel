@@ -169,7 +169,7 @@ impl<RT: Runtime> PassiveSocket<RT> {
             let sender = Sender::new(local_isn + Wrapping(1), window_size, window_scale, mss);
             let receiver = Receiver::new(
                 remote_isn + Wrapping(1),
-                self.rt.tcp_options().receive_window_size as u32,
+                (self.rt.tcp_options().receive_window_size as u32) << window_scale,
             );
             self.inflight.remove(&remote);
             let cb = ControlBlock {
@@ -229,6 +229,8 @@ impl<RT: Runtime> PassiveSocket<RT> {
             .expect("TODO: Window size overflow")
             .try_into()
             .expect("TODO: Window size overflow");
+
+        println!("Initializing window size {} scale {}", window_size, window_scale);
         let accept = InflightAccept {
             local_isn,
             remote_isn,
@@ -252,7 +254,7 @@ impl<RT: Runtime> PassiveSocket<RT> {
     ) -> impl Future<Output = ()> {
         let handshake_retries = 3usize;
         let handshake_timeout = Duration::from_secs(5);
-        let max_window_size = 1024;
+        let max_window_size = rt.tcp_options().receive_window_size as u16;
 
         async move {
             for _ in 0..handshake_retries {

@@ -234,6 +234,7 @@ impl TcpHeader {
     }
 
     pub fn parse(ipv4_header: &Ipv4Header, buf: Bytes) -> Result<(Self, Bytes), Fail> {
+        let _s = tracy_client::static_span!();
         if buf.len() < MIN_TCP_HEADER2_SIZE {
             return Err(Fail::Malformed {
                 details: "TCP segment too small",

@@ -45,6 +45,7 @@ pub struct ControlBlock<RT: Runtime> {
 
 impl<RT: Runtime> ControlBlock<RT> {
     pub fn receive(&self, header: &TcpHeader, data: Bytes) {
+        trace!("Receiving segment: {:?}, {} bytes", header, data.len());
         let now = self.rt.now();
         if header.syn {
             warn!("Ignoring duplicate SYN on established connection");
@@ -65,7 +66,7 @@ impl<RT: Runtime> ControlBlock<RT> {
         }
         if !data.is_empty() {
             if let Err(e) = self.receiver.receive_data(header.seq_num, data, now) {
-                warn!("Ignoring remote data for {:?}: {:?}", header, e);
+                info!("Ignoring remote data for {:?}: {:?}", header, e);
             }
         }
     }
@@ -76,7 +77,7 @@ impl<RT: Runtime> ControlBlock<RT> {
 
     pub fn tcp_header(&self) -> TcpHeader {
         let mut header = TcpHeader::new(self.local.port, self.remote.port);
-        header.window_size = self.receiver.window_size() as u16 >> self.receiver.window_scale;
+        header.window_size = (self.receiver.window_size() >> self.receiver.window_scale) as u16;
         if let Some(ack_seq_no) = self.receiver.current_ack() {
             header.ack_num = ack_seq_no;
             header.ack = true;
@@ -88,6 +89,7 @@ impl<RT: Runtime> ControlBlock<RT> {
         if header.ack {
             self.receiver.ack_sent(header.ack_num);
         }
+        trace!("Sending segment: {:?}, {} bytes", header, data.len());
         let segment = TcpSegment {
             ethernet2_hdr: Ethernet2Header {
                 dst_addr: remote_link_addr,

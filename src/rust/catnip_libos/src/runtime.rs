@@ -142,6 +142,7 @@ impl Runtime for DPDKRuntime {
     type WaitFuture = WaitFuture<TimerRc>;
 
     fn transmit(&self, buf: impl PacketBuf) {
+        let _s = tracy_client::static_span!();
         let pool = { self.inner.borrow().dpdk_mempool };
         let dpdk_port_id = { self.inner.borrow().dpdk_port_id };
         let mut pkt = unsafe { rte_pktmbuf_alloc(pool) };
@@ -168,6 +169,7 @@ impl Runtime for DPDKRuntime {
     }
 
     fn receive(&self) -> Option<Bytes> {
+        let _s = tracy_client::static_span!();
         let mut inner = self.inner.borrow_mut();
         loop {
             if inner.num_buffered > 0 {
@@ -198,6 +200,7 @@ impl Runtime for DPDKRuntime {
             // let nb_rx = unsafe { (rx_burst)(*(*dev.data).rx_queues, todo!(), MAX_QUEUE_DEPTH as u16) };
 
             for &packet in &packets[..nb_rx as usize] {
+                // println!("Receiving packet at timestamp {}", unsafe { (*packet).timestamp });
                 // auto * const p = rte_pktmbuf_mtod(packet, uint8_t *);
                 let p = unsafe {
                     ((*packet).buf_addr as *const u8).offset((*packet).data_off as isize)
