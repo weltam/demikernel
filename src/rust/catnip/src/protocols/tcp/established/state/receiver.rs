@@ -166,7 +166,7 @@ impl Receiver {
     }
 
     pub fn receive_data<RT: crate::runtime::Runtime>(&self, seq_no: SeqNumber, buf: Bytes, now: Instant, cb: &super::ControlBlock<RT>) -> Result<(), Fail> {
-        let _s = tracy_client::static_span!();
+        // let _s = tracy_client::static_span!();
         if self.state.get() != ReceiverState::Open {
             return Err(Fail::ResourceNotFound {
                 details: "Receiver closed",

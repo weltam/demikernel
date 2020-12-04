@@ -145,11 +145,15 @@ struct Inner {
     pool: Vec<Rc<[u8]>>,
 }
 
+#[inline(never)]
+fn noop_span_log() {
+    let _s = tracy_client::static_span!();
+}
+
 impl Runtime for DPDKRuntime {
     type WaitFuture = WaitFuture<TimerRc>;
 
     fn transmit(&self, buf: impl PacketBuf) {
-        let _s = tracy_client::static_span!();
         let pool = { self.inner.borrow().dpdk_mempool };
         let dpdk_port_id = { self.inner.borrow().dpdk_port_id };
         let mut pkt = unsafe { rte_pktmbuf_alloc(pool) };
@@ -161,9 +165,12 @@ impl Runtime for DPDKRuntime {
         let buf_len = unsafe { (*pkt).buf_len } - rte_pktmbuf_headroom;
         assert!(buf_len as usize >= size);
 
-        let out_ptr = unsafe { ((*pkt).buf_addr as *mut u8).offset((*pkt).data_off as isize) };
-        let out_slice = unsafe { slice::from_raw_parts_mut(out_ptr, buf_len as usize) };
-        buf.serialize(&mut out_slice[..size]);
+        {
+            let _t = tracy_client::static_span!("serialize");
+            let out_ptr = unsafe { ((*pkt).buf_addr as *mut u8).offset((*pkt).data_off as isize) };
+            let out_slice = unsafe { slice::from_raw_parts_mut(out_ptr, buf_len as usize) };
+            buf.serialize(&mut out_slice[..size]);
+        }
         let num_sent = unsafe {
             (*pkt).data_len = size as u16;
             (*pkt).pkt_len = size as u32;
@@ -176,7 +183,7 @@ impl Runtime for DPDKRuntime {
     }
 
     fn receive(&self) -> Option<Bytes> {
-        let _s = tracy_client::static_span!();
+        // noop_span_log();
         let mut inner = self.inner.borrow_mut();
         loop {
             if inner.num_buffered > 0 {
@@ -214,8 +221,18 @@ impl Runtime for DPDKRuntime {
                 };
 
                 let data = unsafe { slice::from_raw_parts(p, (*packet).data_len as usize) };
+
+                let buf = inner.pool.pop().unwrap_or_else(|| unsafe { Rc::new_zeroed_slice(ALLOC_SIZE).assume_init() });
+                let mut buf = BytesMut::from_buf(buf);
+
+                let buf = {
+                    // let _t = tracy_client::static_span!("copy");
+                    buf[..data.len()].copy_from_slice(data);
+                    let (buf, _) = buf.freeze().split(data.len());
+                    buf
+                };
                 let ix = inner.num_buffered;
-                inner.buffered[ix] = BytesMut::from(data).freeze();
+                inner.buffered[ix] = buf; 
                 inner.num_buffered += 1;
 
                 unsafe { rte_pktmbuf_free(packet as *const _ as *mut _) };

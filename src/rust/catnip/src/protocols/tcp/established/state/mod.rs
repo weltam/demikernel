@@ -45,7 +45,7 @@ pub struct ControlBlock<RT: Runtime> {
 
 impl<RT: Runtime> ControlBlock<RT> {
     pub fn receive(&self, header: &TcpHeader, data: Bytes) {
-        let _s = tracy_client::static_span!();
+        // let _s = tracy_client::static_span!();
         trace!("Receiving segment: {:?}, {} bytes", header, data.len());
         let now = self.rt.now();
         if header.syn {

@@ -46,7 +46,7 @@ impl<RT: Runtime> Ipv4Peer<RT> {
     }
 
     pub fn receive(&mut self, buf: Bytes) -> Result<(), Fail> {
-        let _s = tracy_client::static_span!();
+        // let _s = tracy_client::static_span!();
         let (header, payload) = Ipv4Header::parse(buf)?;
         if header.dst_addr != self.rt.local_ipv4_addr() && !header.dst_addr.is_broadcast() {
             return Err(Fail::Misdelivered {});

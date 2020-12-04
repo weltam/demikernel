@@ -234,7 +234,7 @@ impl TcpHeader {
     }
 
     pub fn parse(ipv4_header: &Ipv4Header, buf: Bytes) -> Result<(Self, Bytes), Fail> {
-        let _s = tracy_client::static_span!();
+        // let _s = tracy_client::static_span!();
         if buf.len() < MIN_TCP_HEADER2_SIZE {
             return Err(Fail::Malformed {
                 details: "TCP segment too small",
@@ -458,8 +458,8 @@ impl TcpHeader {
         }
 
         // Alright, we've fully filled out the header, time to compute the checksum.
-        let checksum = tcp_checksum(ipv4_hdr, &buf[..], data);
-        NetworkEndian::write_u16(&mut buf[16..18], checksum);
+        // let checksum = tcp_checksum(ipv4_hdr, &buf[..], data);
+        // NetworkEndian::write_u16(&mut buf[16..18], checksum);
     }
 
     pub fn compute_size(&self) -> usize {

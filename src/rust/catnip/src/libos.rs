@@ -101,7 +101,7 @@ impl<RT: Runtime> LibOS<RT> {
     }
 
     pub fn push(&mut self, fd: FileDescriptor, sga: &dmtr_sgarray_t) -> QToken {
-        let _s = static_span!();
+        // let _s = static_span!();
         let mut len = 0;
         for i in 0..sga.sga_numsegs as usize {
             len += sga.sga_segs[i].sgaseg_len;
@@ -127,7 +127,7 @@ impl<RT: Runtime> LibOS<RT> {
     }
 
     pub fn pushto(&mut self, fd: FileDescriptor, sga: &dmtr_sgarray_t, to: Endpoint) -> QToken {
-        let _s = static_span!();
+        // let _s = static_span!();
         let mut len = 0;
         for i in 0..sga.sga_numsegs as usize {
             len += sga.sga_segs[i].sgaseg_len;
@@ -152,7 +152,7 @@ impl<RT: Runtime> LibOS<RT> {
     }
 
     pub fn pop(&mut self, fd: FileDescriptor) -> QToken {
-        let _s = static_span!();
+        // let _s = static_span!();
         let future = self.engine.pop(fd);
         self.rt.scheduler().insert(future).into_raw()
     }
@@ -203,7 +203,7 @@ impl<RT: Runtime> LibOS<RT> {
     }
 
     pub fn wait_any(&mut self, qts: &[QToken]) -> (usize, dmtr_qresult_t) {
-        let _s = static_span!();
+        // let _s = static_span!();
         loop {
             self.poll_bg_work();
             for (i, &qt) in qts.iter().enumerate() {
@@ -243,7 +243,7 @@ impl<RT: Runtime> LibOS<RT> {
     }
 
     fn poll_bg_work(&mut self) {
-        let _s = static_span!();
+        // let _s = static_span!();
         self.rt.scheduler().poll();
         while let Some(pkt) = self.rt.receive() {
             if let Err(e) = self.engine.receive(pkt) {
