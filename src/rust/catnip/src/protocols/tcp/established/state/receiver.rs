@@ -60,7 +60,7 @@ impl Receiver {
         Self {
             state: WatchedValue::new(ReceiverState::Open),
             base_seq_no: WatchedValue::new(seq_no),
-            recv_queue: RefCell::new(VecDeque::new()),
+            recv_queue: RefCell::new(VecDeque::with_capacity(2048)),
             ack_seq_no: WatchedValue::new(seq_no),
             recv_seq_no: WatchedValue::new(seq_no),
             ack_deadline: WatchedValue::new(None),
@@ -165,7 +165,7 @@ impl Receiver {
         self.state.set(ReceiverState::ReceivedFin);
     }
 
-    pub fn receive_data(&self, seq_no: SeqNumber, buf: Bytes, now: Instant) -> Result<(), Fail> {
+    pub fn receive_data<RT: crate::runtime::Runtime>(&self, seq_no: SeqNumber, buf: Bytes, now: Instant, cb: &super::ControlBlock<RT>) -> Result<(), Fail> {
         let _s = tracy_client::static_span!();
         if self.state.get() != ReceiverState::Open {
             return Err(Fail::ResourceNotFound {
@@ -188,6 +188,9 @@ impl Receiver {
                     details: "Out of order segment (reordered)",
                 });
             } else {
+                if let Some(buf) = buf.take_buffer() {
+                    cb.rt.donate_buffer(buf);
+                }
                 return Err(Fail::Ignored {
                     details: "Out of order segment (duplicate)",
                 });
@@ -201,6 +204,9 @@ impl Receiver {
             .map(|b| b.len())
             .sum::<usize>();
         if unread_bytes + buf.len() > self.max_window_size as usize {
+            if let Some(buf) = buf.take_buffer() {
+                cb.rt.donate_buffer(buf);
+            }
             return Err(Fail::Ignored {
                 details: "Full receive window",
             });
@@ -224,7 +230,7 @@ impl Receiver {
         };
         if let Some(old_data) = old_data {
             info!("Recovering out-of-order packet at {}", new_recv_seq_no);
-            if let Err(e) = self.receive_data(new_recv_seq_no, old_data, now) {
+            if let Err(e) = self.receive_data(new_recv_seq_no, old_data, now, cb) {
                 info!("Failed to recover out-of-order packet: {:?}", e);
             }
         }

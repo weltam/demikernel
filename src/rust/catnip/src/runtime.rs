@@ -1,5 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
+use std::rc::Rc;
 use crate::{
     protocols::{
         arp,
@@ -52,4 +53,7 @@ pub trait Runtime: Clone + Unpin + 'static {
 
     fn spawn<F: Future<Output = ()> + 'static>(&self, future: F) -> SchedulerHandle;
     fn scheduler(&self) -> &Scheduler<Operation<Self>>;
+
+    fn donate_buffer(&self, _buf: Rc<[u8]>) {
+    }
 }

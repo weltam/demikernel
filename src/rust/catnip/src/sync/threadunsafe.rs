@@ -149,6 +149,15 @@ impl Bytes {
         };
         (prefix, suffix)
     }
+
+    pub fn take_buffer(self) -> Option<Rc<[u8]>> {
+        let buf = self.buf?;
+        if Rc::strong_count(&buf) == 1 {
+            Some(buf)
+        } else {
+            None
+        }
+    }
 }
 
 impl Deref for Bytes {
@@ -189,6 +198,11 @@ impl From<&[u8]> for BytesMut {
 }
 
 impl BytesMut {
+    pub fn from_buf(buf: Rc<[u8]>) -> Self {
+        assert_eq!(Rc::strong_count(&buf), 1);
+        Self { buf }
+    }
+
     pub fn zeroed(capacity: usize) -> Self {
         assert!(capacity > 0);
         Self {

@@ -118,6 +118,10 @@ impl Bytes {
         };
         (prefix, suffix)
     }
+
+    pub fn take_buffer(self) -> Option<std::rc::Rc<[u8]>> {
+        unimplemented!();
+    }
 }
 
 impl Deref for Bytes {

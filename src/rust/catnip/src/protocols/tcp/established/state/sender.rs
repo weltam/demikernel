@@ -1,4 +1,5 @@
 use super::rto::RtoCalculator;
+use std::rc::Rc;
 use crate::{
     collections::watched::WatchedValue,
     fail::Fail,
@@ -79,7 +80,6 @@ impl fmt::Debug for Sender {
 
 impl Sender {
     pub fn new(seq_no: SeqNumber, window_size: u32, window_scale: u8, mss: usize) -> Self {
-        trace!("Initializing sender with window_size {}, scale {}", window_size, window_scale);
         Self {
             state: WatchedValue::new(SenderState::Open),
 
@@ -113,14 +113,11 @@ impl Sender {
         let sent_seq = self.sent_seq_no.get();
         let Wrapping(sent_data) = sent_seq - base_seq;
 
-        trace!("Sending {} bytes at base_seq {}, sent_seq {}, win_sz {}", buf.len(), base_seq, sent_seq, win_sz);
-
         // Fast path: Try to send the data immediately.
         if win_sz > 0 && win_sz >= sent_data + buf_len && buf.len() <= self.mss {
             if let Some(remote_link_addr) = cb.arp.try_query(cb.remote.address()) {
                 let mut header = cb.tcp_header();
                 header.seq_num = sent_seq;
-                trace!("Taking send fast path for {:?}", header);
                 cb.emit(header, buf.clone(), remote_link_addr);
 
                 self.unsent_seq_no.modify(|s| s + Wrapping(buf_len));
@@ -154,8 +151,7 @@ impl Sender {
         Ok(())
     }
 
-    pub fn remote_ack(&self, ack_seq_no: SeqNumber, now: Instant) -> Result<(), Fail> {
-        let _s = tracy_client::static_span!();
+    pub fn remote_ack<RT: crate::runtime::Runtime>(&self, ack_seq_no: SeqNumber, now: Instant, cb: &super::ControlBlock<RT>) -> Result<(), Fail> {
         if self.state.get() == SenderState::SentFin {
             assert_eq!(self.base_seq_no.get(), self.sent_seq_no.get());
             assert_eq!(self.sent_seq_no.get(), self.unsent_seq_no.get());
@@ -178,8 +174,6 @@ impl Sender {
             // TODO: Handle fast retransmit here.
             return Ok(());
         }
-
-        trace!("Received {} <= ACK {} <= sent_seq_no {}", base_seq_no, ack_seq_no, sent_seq_no);
 
         if ack_seq_no == sent_seq_no {
             // If we've acknowledged all sent data, turn off the retransmit timer.
@@ -206,6 +200,11 @@ impl Sender {
             if let Some(initial_tx) = segment.initial_tx {
                 self.rto.borrow_mut().add_sample(now - initial_tx);
             }
+
+            if let Some(buf) = segment.bytes.take_buffer() {
+                cb.rt.donate_buffer(buf);
+            }
+
             if bytes_remaining == 0 {
                 break;
             }
@@ -249,7 +248,6 @@ impl Sender {
                 details: "Window size overflow",
             })?;
         self.window_size.set(window_size);
-        trace!("Updating windowd size to {}", window_size);
 
         Ok(())
     }

@@ -115,6 +115,8 @@ impl DPDKRuntime {
 
             num_buffered: 0,
             buffered: unsafe { buffered.assume_init() },
+
+            pool: (0..POOL_SIZE).map(|_| unsafe { Rc::new_zeroed_slice(ALLOC_SIZE).assume_init() }).collect(),
         };
         Self {
             inner: Rc::new(RefCell::new(inner)),
@@ -122,6 +124,9 @@ impl DPDKRuntime {
         }
     }
 }
+
+const ALLOC_SIZE: usize = 12288;
+const POOL_SIZE: usize = 1024;
 
 struct Inner {
     timer: TimerRc,
@@ -136,6 +141,8 @@ struct Inner {
 
     num_buffered: usize,
     buffered: [Bytes; MAX_QUEUE_DEPTH],
+
+    pool: Vec<Rc<[u8]>>,
 }
 
 impl Runtime for DPDKRuntime {
@@ -269,5 +276,11 @@ impl Runtime for DPDKRuntime {
 
     fn scheduler(&self) -> &Scheduler<Operation<Self>> {
         &self.scheduler
+    }
+
+    fn donate_buffer(&self, buf: Rc<[u8]>) {
+        if buf.len() == ALLOC_SIZE {
+            self.inner.borrow_mut().pool.push(buf);
+        }
     }
 }
