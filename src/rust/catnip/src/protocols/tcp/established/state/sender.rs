@@ -155,6 +155,7 @@ impl Sender {
     }
 
     pub fn remote_ack(&self, ack_seq_no: SeqNumber, now: Instant) -> Result<(), Fail> {
+        let _s = tracy_client::static_span!();
         if self.state.get() == SenderState::SentFin {
             assert_eq!(self.base_seq_no.get(), self.sent_seq_no.get());
             assert_eq!(self.sent_seq_no.get(), self.unsent_seq_no.get());

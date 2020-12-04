@@ -166,6 +166,7 @@ impl Receiver {
     }
 
     pub fn receive_data(&self, seq_no: SeqNumber, buf: Bytes, now: Instant) -> Result<(), Fail> {
+        let _s = tracy_client::static_span!();
         if self.state.get() != ReceiverState::Open {
             return Err(Fail::ResourceNotFound {
                 details: "Receiver closed",
