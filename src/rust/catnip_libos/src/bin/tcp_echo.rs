@@ -4,6 +4,7 @@
 use std::time::Duration;
 use histogram::Histogram;
 use must_let::must_let;
+use std::io::Write;
 use std::str::FromStr;
 use catnip_libos::runtime::DPDKRuntime;
 use anyhow::{
@@ -29,6 +30,7 @@ use catnip::{
         ethernet2::MacAddress,
     },
     runtime::Runtime,
+    tracing,
 };
 use std::time::Instant;
 use clap::{
@@ -64,6 +66,8 @@ fn main() {
     load_mlx5_driver();
 
     let r: Result<_, Error> = try {
+        tracing::init(1_000_000);
+
         let config_path = env::args().nth(1).unwrap();
         let mut config_s = String::new();
         File::open(config_path)?.read_to_string(&mut config_s)?;
@@ -121,6 +125,7 @@ fn main() {
             disable_arp,
         )?;
         logging::initialize();
+
         let mut libos = LibOS::new(runtime)?;
         let buf_sz: usize = std::env::var("BUFFER_SIZE").unwrap().parse().unwrap();
 
@@ -149,6 +154,8 @@ fn main() {
             let mut push_tokens = Vec::with_capacity(buf_sz / 1000 + 1);
 
             for i in 0..num_iters {
+                tracing::log("round:start");
+
                 if log_round {
                     println!("Round {}", i);
                 }
@@ -169,6 +176,8 @@ fn main() {
                 assert_eq!(bytes_received, buf_sz);
                 libos.wait_all_pushes(&mut push_tokens);
                 assert_eq!(push_tokens.len(), 0);
+
+                tracing::log("round:end");
             }
 
             let mut push_h = Histogram::configure().precision(4).build().unwrap();
@@ -209,6 +218,7 @@ fn main() {
             let exp_start = Instant::now();
             let mut samples = Vec::with_capacity(num_iters);
             for i in 0..num_iters {
+                tracing::log("round:start");
                 if log_round {
                     println!("Round {}", i);
                 }
@@ -231,6 +241,7 @@ fn main() {
                 if log_round {
                     println!("Done popping");
                 }
+                tracing::log("round:end");
             }
             let exp_duration = exp_start.elapsed();
             let throughput = (num_iters as f64 * buf_sz as f64) / exp_duration.as_secs_f64() / 1024. / 1024. / 1024. * 8.;
@@ -244,6 +255,15 @@ fn main() {
         else {
             panic!("Set either ECHO_SERVER or ECHO_CLIENT");
         }
+
+        let (events, num_overflow) = tracing::dump();
+        println!("Dropped {} tracing events", num_overflow);
+        let mut f = std::io::BufWriter::new(std::fs::File::open("events.log"));
+        for (name, ts) in events {
+            write!(f, "{} {}", name, ts);
+        }
+        drop(f);
+
     };
     r.unwrap_or_else(|e| panic!("Initialization failure: {:?}", e));
 }

@@ -40,6 +40,7 @@ pub mod protocols;
 pub mod runtime;
 pub mod scheduler;
 pub mod sync;
+pub mod tracing;
 pub mod test_helpers;
 pub mod timer;
 
