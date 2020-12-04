@@ -223,12 +223,8 @@ fn main() {
                 while bytes_popped < buf_sz {
                     let qtoken = libos.pop(sockfd);
                     must_let!(let (_, OperationResult::Pop(_, popped_buf)) = libos.wait2(qtoken));
-
+                    libos.rt().donate_buffer(popped_buf);
                     bytes_popped += popped_buf.len();
-                    if let Some(buf) = popped_buf.take_buffer() {
-                        libos.rt().donate_buffer(buf);
-                    }
-
                 }
                 assert_eq!(bytes_popped, buf_sz);
                 samples.push(start.elapsed());

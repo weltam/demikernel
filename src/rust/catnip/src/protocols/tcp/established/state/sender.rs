@@ -201,9 +201,7 @@ impl Sender {
                 self.rto.borrow_mut().add_sample(now - initial_tx);
             }
 
-            if let Some(buf) = segment.bytes.take_buffer() {
-                cb.rt.donate_buffer(buf);
-            }
+            cb.rt.donate_buffer(segment.bytes);
 
             if bytes_remaining == 0 {
                 break;

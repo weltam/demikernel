@@ -86,6 +86,10 @@ impl PacketBuf for TcpSegment {
             *byte = 0;
         }
     }
+
+    fn take_buf(self) -> Option<Bytes> {
+        Some(self.data)
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

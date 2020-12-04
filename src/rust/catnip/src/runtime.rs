@@ -1,6 +1,5 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
-use std::rc::Rc;
 use crate::{
     protocols::{
         arp,
@@ -27,9 +26,12 @@ use std::{
     },
 };
 
-pub trait PacketBuf {
+pub trait PacketBuf: Sized {
     fn compute_size(&self) -> usize;
     fn serialize(&self, buf: &mut [u8]);
+    fn take_buf(self) -> Option<Bytes> {
+        None
+    }
 }
 
 pub trait Runtime: Clone + Unpin + 'static {
@@ -54,6 +56,6 @@ pub trait Runtime: Clone + Unpin + 'static {
     fn spawn<F: Future<Output = ()> + 'static>(&self, future: F) -> SchedulerHandle;
     fn scheduler(&self) -> &Scheduler<Operation<Self>>;
 
-    fn donate_buffer(&self, _buf: Rc<[u8]>) {
+    fn donate_buffer(&self, _buf: Bytes) {
     }
 }

@@ -188,9 +188,7 @@ impl Receiver {
                     details: "Out of order segment (reordered)",
                 });
             } else {
-                if let Some(buf) = buf.take_buffer() {
-                    cb.rt.donate_buffer(buf);
-                }
+                cb.rt.donate_buffer(buf);
                 return Err(Fail::Ignored {
                     details: "Out of order segment (duplicate)",
                 });
@@ -204,9 +202,7 @@ impl Receiver {
             .map(|b| b.len())
             .sum::<usize>();
         if unread_bytes + buf.len() > self.max_window_size as usize {
-            if let Some(buf) = buf.take_buffer() {
-                cb.rt.donate_buffer(buf);
-            }
+            cb.rt.donate_buffer(buf);
             return Err(Fail::Ignored {
                 details: "Full receive window",
             });

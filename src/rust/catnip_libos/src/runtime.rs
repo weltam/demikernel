@@ -170,6 +170,9 @@ impl Runtime for DPDKRuntime {
             let out_ptr = unsafe { ((*pkt).buf_addr as *mut u8).offset((*pkt).data_off as isize) };
             let out_slice = unsafe { slice::from_raw_parts_mut(out_ptr, buf_len as usize) };
             buf.serialize(&mut out_slice[..size]);
+            if let Some(buf) = buf.take_buf() {
+                self.donate_buffer(buf);
+            }
         }
         let num_sent = unsafe {
             (*pkt).data_len = size as u16;
@@ -232,7 +235,7 @@ impl Runtime for DPDKRuntime {
                     buf
                 };
                 let ix = inner.num_buffered;
-                inner.buffered[ix] = buf; 
+                inner.buffered[ix] = buf;
                 inner.num_buffered += 1;
 
                 unsafe { rte_pktmbuf_free(packet as *const _ as *mut _) };
@@ -295,9 +298,11 @@ impl Runtime for DPDKRuntime {
         &self.scheduler
     }
 
-    fn donate_buffer(&self, buf: Rc<[u8]>) {
-        if buf.len() == ALLOC_SIZE {
-            self.inner.borrow_mut().pool.push(buf);
+    fn donate_buffer(&self, buf: Buf) {
+        if let Some(buf) = buf.take_buffer() {
+            if buf.len() == ALLOC_SIZE {
+                self.inner.borrow_mut().pool.push(buf);
+            }
         }
     }
 }
