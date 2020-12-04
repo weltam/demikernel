@@ -153,7 +153,6 @@ fn main() {
                     println!("Round {}", i);
                 }
                 let mut bytes_received = 0;
-                push_tokens.clear();
 
                 while bytes_received < buf_sz {
                     let start = Instant::now();

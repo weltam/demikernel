@@ -277,12 +277,12 @@ impl TcpHeader {
 
         let window_size = NetworkEndian::read_u16(&hdr_buf[14..16]);
 
-        let checksum = NetworkEndian::read_u16(&hdr_buf[16..18]);
-        if checksum != tcp_checksum(ipv4_header, &hdr_buf[..], &data_buf[..]) {
-            return Err(Fail::Malformed {
-                details: "TCP checksum mismatch",
-            });
-        }
+        // let checksum = NetworkEndian::read_u16(&hdr_buf[16..18]);
+        // if checksum != tcp_checksum(ipv4_header, &hdr_buf[..], &data_buf[..]) {
+        //     return Err(Fail::Malformed {
+        //         details: "TCP checksum mismatch",
+        //     });
+        // }
 
         let urgent_pointer = NetworkEndian::read_u16(&hdr_buf[18..20]);
 

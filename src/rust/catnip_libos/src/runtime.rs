@@ -61,7 +61,7 @@ use std::{
     },
 };
 
-const MAX_QUEUE_DEPTH: usize = 4;
+const MAX_QUEUE_DEPTH: usize = 16;
 
 #[derive(Clone)]
 pub struct TimerRc(Rc<Timer<TimerRc>>);

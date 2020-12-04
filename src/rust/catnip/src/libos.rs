@@ -26,7 +26,7 @@ use std::{
 use tracy_client::static_span;
 
 const TIMER_RESOLUTION: usize = 64;
-
+const MAX_RECV_ITER: usize = 2;
 pub type QToken = u64;
 
 pub struct LibOS<RT: Runtime> {
@@ -180,10 +180,25 @@ impl<RT: Runtime> LibOS<RT> {
     pub fn wait2(&mut self, qt: QToken) -> (FileDescriptor, OperationResult) {
         let handle = self.rt.scheduler().from_raw_handle(qt).unwrap();
         loop {
-            self.poll_bg_work();
+            self.rt.scheduler().poll();
             if handle.has_completed() {
                 return self.take_operation2(handle);
             }
+            let mut num_received = 0;
+            while let Some(pkt) = self.rt.receive() {
+                num_received += 1;
+                if let Err(e) = self.engine.receive(pkt) {
+                    warn!("Dropped packet: {:?}", e);
+                }
+                if num_received > MAX_RECV_ITER {
+                    break;
+                }
+            }
+            if self.ts_iters == 0 {
+                let _t = static_span!("advance_clock");
+                self.rt.advance_clock(Instant::now());
+            }
+            self.ts_iters = (self.ts_iters + 1) % TIMER_RESOLUTION;
         }
     }
 
@@ -202,19 +217,11 @@ impl<RT: Runtime> LibOS<RT> {
     }
 
     pub fn wait_all_pushes(&mut self, qts: &mut Vec<QToken>) {
-        while !qts.is_empty() {
-            let mut i = 0;
-            while i < qts.len() {
-                let qt = qts[i];
-                let handle = self.rt.scheduler().from_raw_handle(qt).unwrap();
-                if handle.has_completed() {
-                    must_let::must_let!(let (_, OperationResult::Push) = self.take_operation2(handle));
-                    qts.swap_remove(i);
-                } else {
-                    i += 1;
-                }
-            }
-            self.poll_bg_work();
+        self.poll_bg_work();
+        for qt in qts.drain(..) {
+            let handle = self.rt.scheduler().from_raw_handle(qt).unwrap();
+            assert!(handle.has_completed());
+            must_let::must_let!(let (_, OperationResult::Push) = self.take_operation2(handle));
         }
     }
 
