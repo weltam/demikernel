@@ -298,7 +298,7 @@ impl Runtime for DPDKRuntime {
         &self.scheduler
     }
 
-    fn donate_buffer(&self, buf: Buf) {
+    fn donate_buffer(&self, buf: Bytes) {
         if let Some(buf) = buf.take_buffer() {
             if buf.len() == ALLOC_SIZE {
                 self.inner.borrow_mut().pool.push(buf);
