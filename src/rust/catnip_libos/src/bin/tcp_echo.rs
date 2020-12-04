@@ -146,34 +146,30 @@ fn main() {
             let mut push_latency = Vec::with_capacity(num_iters);
             let mut pop_latency = Vec::with_capacity(num_iters);
 
-            let mut scratch = Vec::with_capacity(buf_sz);
+            let mut push_tokens = Vec::with_capacity(buf_sz / 1000 + 1);
 
             for i in 0..num_iters {
                 if log_round {
                     println!("Round {}", i);
                 }
-                scratch.clear();
+                let mut bytes_received = 0;
+                push_tokens.clear();
 
-                while scratch.len() < buf_sz {
+                while bytes_received < buf_sz {
                     let start = Instant::now();
                     let qtoken = libos.pop(fd);
                     pop_latency.push(start.elapsed());
                     must_let!(let (_, OperationResult::Pop(_, buf)) = libos.wait2(qtoken));
-                    scratch.extend(&buf[..]);
-                }
-                assert_eq!(scratch.len(), buf_sz);
-                let buf = BytesMut::from(&scratch[..]).freeze();
-                if log_round {
-                    println!("Done popping");
-                }
+                    bytes_received += buf.len();
 
-                let start = Instant::now();
-                let qtoken = libos.push2(fd, buf);
-                push_latency.push(start.elapsed());
-                must_let!(let (_, OperationResult::Push) = libos.wait2(qtoken));
-                if log_round {
-                    println!("Done pushing");
+                    let start = Instant::now();
+                    let qtoken = libos.push2(fd, buf);
+                    push_latency.push(start.elapsed());
+                    push_tokens.push(qtoken);
                 }
+                assert_eq!(bytes_received, buf_sz);
+                libos.wait_all_pushes(&mut push_tokens);
+                assert_eq!(push_tokens.len(), 0);
             }
 
             let mut push_h = Histogram::configure().precision(4).build().unwrap();

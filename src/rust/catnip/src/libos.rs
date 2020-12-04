@@ -201,6 +201,23 @@ impl<RT: Runtime> LibOS<RT> {
         }
     }
 
+    pub fn wait_all_pushes(&mut self, qts: &mut Vec<QToken>) {
+        while !qts.is_empty() {
+            let mut i = 0;
+            while i < qts.len() {
+                let qt = qts[i];
+                let handle = self.rt.scheduler().from_raw_handle(qt).unwrap();
+                if handle.has_completed() {
+                    must_let::must_let!(let (_, OperationResult::Push) = self.take_operation2(handle));
+                    qts.swap_remove(i);
+                } else {
+                    i += 1;
+                }
+            }
+            self.poll_bg_work();
+        }
+    }
+
     fn take_operation(&mut self, handle: SchedulerHandle, qt: QToken) -> dmtr_qresult_t {
         let (qd, r) = match self.rt.scheduler().take(handle) {
             Operation::Tcp(f) => f.expect_result(),
