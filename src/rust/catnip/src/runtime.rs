@@ -11,7 +11,7 @@ use crate::{
         Scheduler,
         SchedulerHandle,
     },
-    sync::Bytes,
+    sync::{Mbuf, Bytes},
 };
 use rand::distributions::{
     Distribution,
@@ -29,6 +29,9 @@ use std::{
 pub trait PacketBuf: Sized {
     fn compute_size(&self) -> usize;
     fn serialize(&self, buf: &mut [u8]);
+    fn serialize2(self) -> Result<Mbuf, Self> {
+        Err(self) 
+    }
     fn take_buf(self) -> Option<Bytes> {
         None
     }

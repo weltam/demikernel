@@ -15,7 +15,7 @@ use crate::{
         tcp::SeqNumber,
     },
     runtime::PacketBuf,
-    sync::Bytes,
+    sync::{BufEnum, Bytes},
 };
 use byteorder::{
     ByteOrder,
@@ -95,6 +95,63 @@ impl PacketBuf for TcpSegment {
             *byte = 0;
         }
         // crate::tracing::log("padding:end");
+    }
+
+    fn serialize2(self) -> Result<crate::sync::Mbuf, Self> {
+        if self.data.is_empty() {
+            return Err(self);
+        }
+        let Self { ethernet2_hdr, ipv4_hdr, tcp_hdr, data } = self;
+        let (buf, offset, len) = unsafe { data.take_buffer_unsafe() };
+
+        let mut buf = match buf {
+            BufEnum::DPDK(buf) => buf,
+            b => {
+                let data = Bytes::from_obj(b);
+                let (_, data) = data.split(offset);
+                let (data, _) = data.split(len);
+                let s = Self { ethernet2_hdr, ipv4_hdr, tcp_hdr, data };
+                trace!("Slow path, didn't have a DPDK buffer");
+                return Err(s);
+            },
+        };
+        trace!("Fast path, have DPDK buffer of len {}, body is [{}, {})", buf.len(), offset, offset + len);
+        let eth_hdr_size = ethernet2_hdr.compute_size();
+        let ipv4_hdr_size = ipv4_hdr.compute_size();
+        let tcp_hdr_size = tcp_hdr.compute_size();
+        let hdr_sizes = eth_hdr_size + ipv4_hdr_size + tcp_hdr_size; 
+        assert!(hdr_sizes <= offset, "{} vs. {}", hdr_sizes, offset);
+
+        let buf_start = offset - hdr_sizes;
+        let mut cur_pos = buf_start;
+        ethernet2_hdr.serialize(&mut buf[cur_pos..(cur_pos + eth_hdr_size)]);
+        trace!("Serialized eth header [{}, {}): {:?}", cur_pos, cur_pos + eth_hdr_size, &buf[cur_pos..(cur_pos + eth_hdr_size)]);
+        cur_pos += eth_hdr_size;
+
+
+        let ipv4_payload_len = tcp_hdr_size + len;
+        ipv4_hdr.serialize(&mut buf[cur_pos..(cur_pos + ipv4_hdr_size)], ipv4_payload_len);
+        trace!("Serialized ipv4 header [{}, {}): {:?}", cur_pos, cur_pos + ipv4_hdr_size, &buf[cur_pos..(cur_pos + ipv4_hdr_size)]);
+        cur_pos += ipv4_hdr_size;
+
+        tcp_hdr.serialize(&mut buf[cur_pos..(cur_pos + tcp_hdr_size)], &ipv4_hdr, &[]);
+        trace!("Serialized tcp header [{}, {}): {:?}", cur_pos, cur_pos + tcp_hdr_size, &buf[cur_pos..(cur_pos + tcp_hdr_size)]);
+        cur_pos += tcp_hdr_size;
+
+        cur_pos += len;
+
+
+        // if cur_pos < buf.len() {
+        //     trace!("Trimming {} bytes", buf.len() - cur_pos);
+        //     buf.trim(buf.len() - cur_pos);
+        // }
+        if buf_start > 0 {
+            buf.adjust(buf_start);
+        }
+
+        
+
+        Ok(buf)
     }
 
     fn take_buf(self) -> Option<Bytes> {

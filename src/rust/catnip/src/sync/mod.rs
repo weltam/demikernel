@@ -7,6 +7,8 @@ pub use self::threadunsafe::{
     BytesMut,
     SharedWaker,
     WakerU64,
+    Mbuf,
+    BufEnum,
 };
 
 #[cfg(not(feature = "threadunsafe"))]

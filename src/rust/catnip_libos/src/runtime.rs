@@ -1,4 +1,6 @@
 use hashbrown::HashMap;
+use std::any::Any;
+use catnip::sync::BufEnum;
 use dpdk_rs::{
     rte_eth_dev,
     rte_eth_devices,
@@ -76,6 +78,7 @@ impl TimerPtr for TimerRc {
 pub struct DPDKRuntime {
     inner: Rc<RefCell<Inner>>,
     scheduler: Scheduler<Operation<Self>>,
+    dummy: Rc<[u8]>,
 }
 
 impl DPDKRuntime {
@@ -121,6 +124,7 @@ impl DPDKRuntime {
         Self {
             inner: Rc::new(RefCell::new(inner)),
             scheduler: Scheduler::new(),
+            dummy: Rc::new([]),
         }
     }
 }
@@ -153,13 +157,27 @@ fn noop_span_log() {
 impl Runtime for DPDKRuntime {
     type WaitFuture = WaitFuture<TimerRc>;
 
-    fn transmit(&self, buf: impl PacketBuf) {
+    fn transmit(&self, mut buf: impl PacketBuf) {
         let pool = { self.inner.borrow().dpdk_mempool };
         let dpdk_port_id = { self.inner.borrow().dpdk_port_id };
         // catnip::tracing::log("pktmbuf_alloc:start");
         let mut pkt = unsafe { rte_pktmbuf_alloc(pool) };
         // catnip::tracing::log("pktmbuf_alloc:end");
         assert!(!pkt.is_null());
+
+        match buf.serialize2() {
+            Ok(mut mbuf) => {
+                let nb_tx = unsafe {
+                    rte_eth_tx_burst(dpdk_port_id, 0, &mut mbuf.pkt as *mut _, 1)
+                };
+                std::mem::forget(mbuf);
+                assert_eq!(nb_tx, 1);
+                return;
+            },
+            Err(buf_) => {
+                buf = buf_;
+            },
+        }
 
         let size = buf.compute_size();
 
@@ -178,6 +196,9 @@ impl Runtime for DPDKRuntime {
                 self.donate_buffer(buf);
             }
         }
+        // unsafe { dpdk_rs::rte_mbuf_refcnt_update(pkt, 1) };
+        // let pool_size = unsafe { dpdk_rs::rte_mempool_avail_count(pool) };
+        // println!("refcnt before: {}, pool_size {}", unsafe {dpdk_rs::rte_mbuf_refcnt_read(pkt)}, pool_size);
         let num_sent = unsafe {
             (*pkt).data_len = size as u16;
             (*pkt).pkt_len = size as u32;
@@ -187,6 +208,9 @@ impl Runtime for DPDKRuntime {
             // catnip::tracing::log("tx_burst:start");
             rte_eth_tx_burst(dpdk_port_id, 0, &mut pkt as *mut _, 1)
         };
+        // println!("refcnt after: {}", unsafe {dpdk_rs::rte_mbuf_refcnt_read(pkt)});
+        // unsafe { rte_pktmbuf_free(pkt) };
+
         // catnip::tracing::log("tx_burst:end");
         assert_eq!(num_sent, 1);
     }
@@ -225,26 +249,28 @@ impl Runtime for DPDKRuntime {
             for &packet in &packets[..nb_rx as usize] {
                 // println!("Receiving packet at timestamp {}", unsafe { (*packet).timestamp });
                 // auto * const p = rte_pktmbuf_mtod(packet, uint8_t *);
-                let p = unsafe {
-                    ((*packet).buf_addr as *const u8).offset((*packet).data_off as isize)
-                };
+                let pkt = catnip::sync::Mbuf::new(packet);
+                let buf = Bytes::from_obj(catnip::sync::BufEnum::DPDK(pkt));
+                // let p = unsafe {
+                //     ((*packet).buf_addr as *const u8).offset((*packet).data_off as isize)
+                // };
 
-                let data = unsafe { slice::from_raw_parts(p, (*packet).data_len as usize) };
+                // let data = unsafe { slice::from_raw_parts(p, (*packet).data_len as usize) };
 
-                let buf = inner.pool.pop().unwrap_or_else(|| unsafe { Rc::new_zeroed_slice(ALLOC_SIZE).assume_init() });
-                let mut buf = BytesMut::from_buf(buf);
+                // let buf = inner.pool.pop().unwrap_or_else(|| unsafe { Rc::new_zeroed_slice(ALLOC_SIZE).assume_init() });
+                // let mut buf = BytesMut::from_buf(buf);
 
-                let buf = {
-                    // let _t = tracy_client::static_span!("copy");
-                    buf[..data.len()].copy_from_slice(data);
-                    let (buf, _) = buf.freeze().split(data.len());
-                    buf
-                };
+                // let buf = {
+                //     // let _t = tracy_client::static_span!("copy");
+                //     buf[..data.len()].copy_from_slice(data);
+                //     let (buf, _) = buf.freeze().split(data.len());
+                //     buf
+                // };
                 let ix = inner.num_buffered;
                 inner.buffered[ix] = buf;
                 inner.num_buffered += 1;
 
-                unsafe { rte_pktmbuf_free(packet as *const _ as *mut _) };
+                // unsafe { rte_pktmbuf_free(packet as *const _ as *mut _) };
             }
         }
     }
@@ -305,9 +331,16 @@ impl Runtime for DPDKRuntime {
     }
 
     fn donate_buffer(&self, buf: Bytes) {
-        if let Some(buf) = buf.take_buffer() {
-            if buf.len() == ALLOC_SIZE {
-                self.inner.borrow_mut().pool.push(buf);
+        if let Some(mut buf) = buf.take_buffer() {
+            match buf {
+                BufEnum::DPDK(pkt) => {
+                    drop(pkt);
+                },
+                BufEnum::Rust(b) => {
+                    if b.len() == ALLOC_SIZE {
+                        self.inner.borrow_mut().pool.push(b);
+                    }
+                },
             }
         }
     }

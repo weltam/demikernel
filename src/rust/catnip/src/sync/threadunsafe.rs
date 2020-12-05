@@ -99,11 +99,120 @@ impl WakerU64 {
     }
 }
 
-#[derive(Clone)]
+use dpdk_rs::{
+    rte_mempool,
+    rte_mbuf,
+    rte_mbuf_refcnt_update,
+    rte_pktmbuf_free,
+    rte_mbuf_refcnt_read,
+    rte_pktmbuf_adj,
+    rte_pktmbuf_trim,
+};
+use std::slice;
+use std::ptr;
+
+#[derive(Debug)]
+pub struct Mbuf {
+    pub pkt: *mut rte_mbuf,
+}
+
+impl Mbuf {
+    pub fn new(pkt: *mut rte_mbuf) -> Self {
+        Self { pkt }
+    }
+
+    pub fn adjust(&mut self, bytes: usize) {
+        assert!(bytes <= self.len());
+        assert_ne!(unsafe { rte_pktmbuf_adj(self.pkt, bytes as u16) }, ptr::null_mut());
+    }
+
+    pub fn trim(&mut self, bytes: usize) {
+        assert!(bytes <= self.len());
+        assert_eq!(unsafe { rte_pktmbuf_trim(self.pkt, bytes as u16) }, 0);
+    }
+}   
+
+impl Deref for Mbuf {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        let rte_pktmbuf_headroom = 128;
+        let buf_len = unsafe { (*self.pkt).buf_len - rte_pktmbuf_headroom };
+        let ptr = unsafe { ((*self.pkt).buf_addr as *mut u8).offset((*self.pkt).data_off as isize) };
+        unsafe { slice::from_raw_parts(ptr, buf_len as usize) }
+    }
+}
+
+impl DerefMut for Mbuf {
+    fn deref_mut(&mut self) -> &mut [u8] {
+        let rte_pktmbuf_headroom = 128;
+        let buf_len = unsafe { (*self.pkt).buf_len - rte_pktmbuf_headroom };
+        let ptr = unsafe { ((*self.pkt).buf_addr as *mut u8).offset((*self.pkt).data_off as isize) };
+        unsafe { slice::from_raw_parts_mut(ptr, buf_len as usize) }
+
+    }
+}   
+
+impl Clone for Mbuf {
+    fn clone(&self) -> Self {
+        unsafe { rte_mbuf_refcnt_update(self.pkt, 1) };
+        Self { pkt: self.pkt }
+    }
+}
+
+impl Drop for Mbuf {
+    fn drop(&mut self) {
+        unsafe { rte_pktmbuf_free(self.pkt); }
+        self.pkt = ptr::null_mut();
+    }
+}
+
+impl Mbuf {
+    fn refcount(&self) -> usize {
+        let cnt = unsafe { rte_mbuf_refcnt_read(self.pkt) };
+        cnt as usize
+    }
+}
+
+
+#[derive(Clone, Debug)]
+pub enum BufEnum {
+    Rust(Rc<[u8]>),
+    DPDK(Mbuf),
+}
+
+impl Deref for BufEnum {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        match self {
+            BufEnum::Rust(ref b) => b.deref(),
+            BufEnum::DPDK(ref b) => b.deref(),
+        }
+    }
+}
+
+impl BufEnum {
+    fn refcount(&self) -> usize {
+        match self {
+            BufEnum::Rust(ref b) => Rc::strong_count(b),
+            BufEnum::DPDK(ref b) => b.refcount(),
+        }
+    }
+}
+
 pub struct Bytes {
-    buf: Option<Rc<[u8]>>,
+    buf: Option<BufEnum>,
     offset: usize,
     len: usize,
+}
+
+impl Clone for Bytes {
+    fn clone(&self) -> Self {
+        Self {
+            buf: self.buf.clone(), 
+            offset: self.offset,
+            len: self.len,
+        }
+    }
 }
 
 impl PartialEq for Bytes {
@@ -131,6 +240,14 @@ impl Bytes {
         }
     }
 
+    pub fn from_obj(obj: BufEnum) -> Self {
+        Self {
+            offset: 0,
+            len: obj[..].len(),
+            buf: Some(obj),
+        }
+    }
+
     pub fn split(self, ix: usize) -> (Self, Self) {
         if ix == self.len() {
             return (self, Bytes::empty());
@@ -150,13 +267,17 @@ impl Bytes {
         (prefix, suffix)
     }
 
-    pub fn take_buffer(self) -> Option<Rc<[u8]>> {
+    pub fn take_buffer(self) -> Option<BufEnum> {
         let buf = self.buf?;
-        if Rc::strong_count(&buf) == 1 {
+        if buf.refcount() == 1 {
             Some(buf)
         } else {
             None
         }
+    }
+
+    pub unsafe fn take_buffer_unsafe(self) -> (BufEnum, usize, usize) {
+        (self.buf.unwrap(), self.offset, self.len)
     }
 }
 
@@ -214,7 +335,7 @@ impl BytesMut {
         Bytes {
             offset: 0,
             len: self.buf.len(),
-            buf: Some(self.buf),
+            buf: Some(BufEnum::Rust(self.buf)),
         }
     }
 }
