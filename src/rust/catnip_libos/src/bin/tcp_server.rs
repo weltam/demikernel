@@ -1,7 +1,8 @@
 #![feature(maybe_uninit_uninit_array)]
 #![feature(try_blocks)]
 
-use std::time::Duration;
+use std::collections::VecDeque;
+use std::time::{Instant, Duration};
 use std::io::Write;
 use std::str::FromStr;
 use anyhow::{
@@ -122,8 +123,32 @@ fn main() {
         let mut qtokens = Vec::with_capacity(1024);
         qtokens.push(libos.accept(sockfd));
         let mut num_connections = 0;
+       
+        let mut throughput_n = 1024;
+        let mut bytes_outstanding = 0;
+        let mut throughput_data: VecDeque<(Instant, usize)> = VecDeque::with_capacity(throughput_n);
+        let mut i = 1;
+        let mut last_log = Instant::now();
+        let logging_interval = Duration::from_secs(1);
 
         while !SHUTDOWN.load(Ordering::Relaxed) {
+            if i % 2 == 0 {
+                let now = Instant::now();
+                if now - last_log > logging_interval {
+                    last_log = now;
+                    if let Some((start_ts, _)) = throughput_data.iter().next() {
+                        if let Some((end_ts, _)) = throughput_data.iter().rev().next() {
+                            let interval = end_ts.duration_since(*start_ts).as_secs_f64();
+                            let throughput = (bytes_outstanding as f64) / interval / 1024. / 1024. * 8.;
+                            let staleness = now.duration_since(*end_ts);
+                            println!("Throughput: {} Mbps (over {} seconds, last data {:?} ago)", throughput, interval, staleness);
+                        }
+                    }
+                }
+            }
+            i += 1;
+                        
+
             match libos.wait_any2(&mut qtokens, Duration::from_secs(1)) {
                 None => continue,
                 Some((fd, OperationResult::Accept(new_fd))) => {
@@ -134,6 +159,12 @@ fn main() {
                     qtokens.push(libos.pop(new_fd));
                 },
                 Some((fd, OperationResult::Pop(_, buf))) => {
+                    if throughput_data.len() == throughput_n {
+                        let (ts, buf_sz) = throughput_data.pop_front().unwrap();
+                        bytes_outstanding -= buf_sz;
+                    }
+                    throughput_data.push_back((Instant::now(), buf.len()));
+                    bytes_outstanding += buf.len();
                     qtokens.push(libos.push2(fd, buf));
                     qtokens.push(libos.pop(fd));
                 },
