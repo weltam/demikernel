@@ -93,7 +93,7 @@ pub fn initialize_dpdk(
     );
 
     let name = CString::new("default_mbuf_pool").unwrap();
-    let num_mbufs = 8191;
+    let num_mbufs = 8192;
     let mbuf_cache_size = 250;
     let mbuf_pool = unsafe {
         rte_pktmbuf_pool_create(

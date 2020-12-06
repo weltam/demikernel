@@ -180,7 +180,7 @@ where
     where
         K: Debug,
     {
-        trace!("HashTtlCache::get({:?})", key);
+        // trace!("HashTtlCache::get({:?})", key);
         debug!("self.map.len() -> {:?}", self.map.len());
         match self.map.get(key) {
             None => {

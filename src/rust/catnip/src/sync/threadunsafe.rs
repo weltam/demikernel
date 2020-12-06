@@ -123,12 +123,16 @@ impl Mbuf {
 
     pub fn adjust(&mut self, bytes: usize) {
         assert!(bytes <= self.len());
-        assert_ne!(unsafe { rte_pktmbuf_adj(self.pkt, bytes as u16) }, ptr::null_mut());
+        if unsafe { rte_pktmbuf_adj(self.pkt, bytes as u16) } == ptr::null_mut() {
+            panic!("rte_pktmbuf_adj failed");
+        }
     }
 
     pub fn trim(&mut self, bytes: usize) {
         assert!(bytes <= self.len());
-        assert_eq!(unsafe { rte_pktmbuf_trim(self.pkt, bytes as u16) }, 0);
+        if unsafe { rte_pktmbuf_trim(self.pkt, bytes as u16) } != 0 {
+            panic!("rte_pktmbuf_trim failed");
+        }
     }
 }   
 
@@ -136,7 +140,7 @@ impl Deref for Mbuf {
     type Target = [u8];
     fn deref(&self) -> &[u8] {
         let rte_pktmbuf_headroom = 128;
-        let buf_len = unsafe { (*self.pkt).buf_len - rte_pktmbuf_headroom };
+        let buf_len = unsafe { (*self.pkt).data_len - rte_pktmbuf_headroom };
         let ptr = unsafe { ((*self.pkt).buf_addr as *mut u8).offset((*self.pkt).data_off as isize) };
         unsafe { slice::from_raw_parts(ptr, buf_len as usize) }
     }
@@ -145,7 +149,7 @@ impl Deref for Mbuf {
 impl DerefMut for Mbuf {
     fn deref_mut(&mut self) -> &mut [u8] {
         let rte_pktmbuf_headroom = 128;
-        let buf_len = unsafe { (*self.pkt).buf_len - rte_pktmbuf_headroom };
+        let buf_len = unsafe { (*self.pkt).data_len - rte_pktmbuf_headroom };
         let ptr = unsafe { ((*self.pkt).buf_addr as *mut u8).offset((*self.pkt).data_off as isize) };
         unsafe { slice::from_raw_parts_mut(ptr, buf_len as usize) }
 

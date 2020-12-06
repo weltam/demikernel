@@ -111,11 +111,11 @@ impl PacketBuf for TcpSegment {
                 let (_, data) = data.split(offset);
                 let (data, _) = data.split(len);
                 let s = Self { ethernet2_hdr, ipv4_hdr, tcp_hdr, data };
-                trace!("Slow path, didn't have a DPDK buffer");
+                // trace!("Slow path, didn't have a DPDK buffer");
                 return Err(s);
             },
         };
-        trace!("Fast path, have DPDK buffer of len {}, body is [{}, {})", buf.len(), offset, offset + len);
+        // trace!("Fast path, have DPDK buffer of len {}, body is [{}, {})", buf.len(), offset, offset + len);
         let eth_hdr_size = ethernet2_hdr.compute_size();
         let ipv4_hdr_size = ipv4_hdr.compute_size();
         let tcp_hdr_size = tcp_hdr.compute_size();
@@ -125,27 +125,27 @@ impl PacketBuf for TcpSegment {
         let buf_start = offset - hdr_sizes;
         let mut cur_pos = buf_start;
         ethernet2_hdr.serialize(&mut buf[cur_pos..(cur_pos + eth_hdr_size)]);
-        trace!("Serialized eth header [{}, {}): {:?}", cur_pos, cur_pos + eth_hdr_size, &buf[cur_pos..(cur_pos + eth_hdr_size)]);
+        // trace!("Serialized eth header [{}, {}): {:?}", cur_pos, cur_pos + eth_hdr_size, &buf[cur_pos..(cur_pos + eth_hdr_size)]);
         cur_pos += eth_hdr_size;
 
 
         let ipv4_payload_len = tcp_hdr_size + len;
         ipv4_hdr.serialize(&mut buf[cur_pos..(cur_pos + ipv4_hdr_size)], ipv4_payload_len);
-        trace!("Serialized ipv4 header [{}, {}): {:?}", cur_pos, cur_pos + ipv4_hdr_size, &buf[cur_pos..(cur_pos + ipv4_hdr_size)]);
+        // trace!("Serialized ipv4 header [{}, {}): {:?}", cur_pos, cur_pos + ipv4_hdr_size, &buf[cur_pos..(cur_pos + ipv4_hdr_size)]);
         cur_pos += ipv4_hdr_size;
 
         tcp_hdr.serialize(&mut buf[cur_pos..(cur_pos + tcp_hdr_size)], &ipv4_hdr, &[]);
-        trace!("Serialized tcp header [{}, {}): {:?}", cur_pos, cur_pos + tcp_hdr_size, &buf[cur_pos..(cur_pos + tcp_hdr_size)]);
+        // trace!("Serialized tcp header [{}, {}): {:?}", cur_pos, cur_pos + tcp_hdr_size, &buf[cur_pos..(cur_pos + tcp_hdr_size)]);
         cur_pos += tcp_hdr_size;
 
         cur_pos += len;
 
-
-        // if cur_pos < buf.len() {
-        //     trace!("Trimming {} bytes", buf.len() - cur_pos);
-        //     buf.trim(buf.len() - cur_pos);
-        // }
+        if cur_pos < buf.len() {
+            // trace!("Trimming {} bytes", buf.len() - cur_pos);
+            buf.trim(buf.len() - cur_pos);
+        }
         if buf_start > 0 {
+            // trace!("Adjusting {} bytes", buf_start);
             buf.adjust(buf_start);
         }
 

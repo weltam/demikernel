@@ -25,6 +25,7 @@ use catnip::{
     sync::{
         Bytes,
         BytesMut,
+        Mbuf,
     },
     timer::{
         Timer,
@@ -82,6 +83,18 @@ pub struct DPDKRuntime {
 }
 
 impl DPDKRuntime {
+    pub fn alloc_mbuf(&self) -> Mbuf {
+        let pool = { self.inner.borrow().dpdk_mempool };
+        let mut pkt = unsafe { rte_pktmbuf_alloc(pool) };
+        // catnip::tracing::log("pktmbuf_alloc:end");
+        assert!(!pkt.is_null());
+        unsafe { 
+            let mut pkt = &mut *pkt;
+            pkt.data_len = pkt.buf_len - pkt.data_off;
+        }
+        Mbuf::new(pkt)
+
+    }
     pub fn new(
         link_addr: MacAddress,
         ipv4_addr: Ipv4Addr,
@@ -249,8 +262,18 @@ impl Runtime for DPDKRuntime {
             for &packet in &packets[..nb_rx as usize] {
                 // println!("Receiving packet at timestamp {}", unsafe { (*packet).timestamp });
                 // auto * const p = rte_pktmbuf_mtod(packet, uint8_t *);
-                let pkt = catnip::sync::Mbuf::new(packet);
-                let buf = Bytes::from_obj(catnip::sync::BufEnum::DPDK(pkt));
+                let buf = unsafe {
+                    let mut packet = &mut *packet;
+                    let buf_len = packet.buf_len;
+                    let data_len = packet.data_len;
+                    packet.data_len = buf_len - packet.data_off;
+                    let pkt = catnip::sync::Mbuf::new(packet);
+                    let buf = Bytes::from_obj(catnip::sync::BufEnum::DPDK(pkt));
+                    let (buf, _) = buf.split(data_len as usize);
+                    buf
+                };
+                // let pkt = catnip::sync::Mbuf::new(packet);
+                // let buf = Bytes::from_obj(catnip::sync::BufEnum::DPDK(pkt));
                 // let p = unsafe {
                 //     ((*packet).buf_addr as *const u8).offset((*packet).data_off as isize)
                 // };

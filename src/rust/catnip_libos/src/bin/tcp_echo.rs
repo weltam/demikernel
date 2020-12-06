@@ -219,11 +219,33 @@ fn main() {
             let qtoken = libos.connect(sockfd, endpoint);
             must_let!(let (_, OperationResult::Connect) = libos.wait2(qtoken));
 
+            let mss: usize = std::env::var("MSS").unwrap().parse().unwrap();
+            let hdr_size = 54;
+
+            let num_bufs = (buf_sz - 1) / mss + 1;
+            let mut bufs = Vec::with_capacity(num_bufs);
+
+            for i in 0..num_bufs {
+                let start = i * mss;
+                let end = std::cmp::min(start + mss, buf_sz);
+                let len = end - start;
+                let mut pktbuf: catnip::sync::Mbuf = libos.rt().alloc_mbuf();
+                for j in hdr_size..(hdr_size + len) {
+                    pktbuf[j] = 'a' as u8;
+                }
+                let buf = catnip::sync::Bytes::from_obj(catnip::sync::BufEnum::DPDK(pktbuf));
+                let (_, buf) = buf.split(hdr_size);
+                let (buf, _) = buf.split(len);
+                println!("Buf {}, {} bytes", i, buf.len());
+                bufs.push(buf); 
+            }
+
             let mut buf = BytesMut::zeroed(buf_sz);
             for b in &mut buf[..] {
                 *b = 'a' as u8;
             }
             let buf = buf.freeze();
+            let mut push_tokens = Vec::with_capacity(num_bufs);
 
             let exp_start = Instant::now();
             let mut samples = Vec::with_capacity(num_iters);
@@ -234,11 +256,23 @@ fn main() {
                 }
                 let start = Instant::now();
                 // tracing::log("push2:start");
-                let qtoken = libos.push2(sockfd, buf.clone());
+                // let qtoken = libos.push2(sockfd, buf.clone());
                 // tracing::log("push2:end");
-                tracing::log("push_wait3:start");
-                must_let!(let (_, OperationResult::Push) = libos.wait3(qtoken));
-                tracing::log("push_wait3:end");
+                // tracing::log("push_wait3:start");
+                // must_let!(let (_, OperationResult::Push) = libos.wait3(qtoken));
+                // tracing::log("push_wait3:end");
+
+                assert!(push_tokens.is_empty());
+                for b in &bufs {
+                    // tracing::log("push2:start");
+                    let qtoken = libos.push2(sockfd, b.clone());
+                    // tracing::log("push2:end");
+                    push_tokens.push(qtoken);
+                }
+                // tracing::log("wait_all_pushes:start");
+                libos.wait_all_pushes(&mut push_tokens);
+                // tracing::log("wait_all_pushes:end");
+
                 if log_round {
                     println!("Done pushing");
                 }

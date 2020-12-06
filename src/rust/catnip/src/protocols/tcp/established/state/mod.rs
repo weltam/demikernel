@@ -46,7 +46,7 @@ pub struct ControlBlock<RT: Runtime> {
 impl<RT: Runtime> ControlBlock<RT> {
     pub fn receive(&self, header: &TcpHeader, data: Bytes) {
         // let _s = tracy_client::static_span!();
-        trace!("Receiving segment: {:?}, {} bytes", header, data.len());
+        // trace!("Receiving segment: {:?}, {} bytes", header, data.len());
         let now = self.rt.now();
         if header.syn {
             warn!("Ignoring duplicate SYN on established connection");
@@ -92,7 +92,7 @@ impl<RT: Runtime> ControlBlock<RT> {
             self.receiver.ack_sent(header.ack_num);
             // crate::tracing::log("ack_sent:end");
         }
-        trace!("Sending segment: {:?}, {} bytes", header, data.len());
+        // trace!("Sending segment: {:?}, {} bytes", header, data.len());
         let segment = TcpSegment {
             ethernet2_hdr: Ethernet2Header {
                 dst_addr: remote_link_addr,

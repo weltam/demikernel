@@ -56,7 +56,7 @@ pub struct Receiver {
 impl Receiver {
     pub fn new(seq_no: SeqNumber, max_window_size: u32) -> Self {
         let window_scale = std::env::var("WINDOW_SCALE").unwrap().parse().unwrap();
-        trace!("Initializing receiver with max window {}, scale {}", max_window_size, window_scale);
+        // trace!("Initializing receiver with max window {}, scale {}", max_window_size, window_scale);
         Self {
             state: WatchedValue::new(ReceiverState::Open),
             base_seq_no: WatchedValue::new(seq_no),
@@ -152,7 +152,7 @@ impl Receiver {
             .pop_front()
             .expect("recv_seq > base_seq without data in queue?");
 
-        trace!("recv {} bytes at {}", segment.len(), self.base_seq_no.get());
+        // trace!("recv {} bytes at {}", segment.len(), self.base_seq_no.get());
         self.base_seq_no
             .modify(|b| b + Wrapping(segment.len() as u32));
 

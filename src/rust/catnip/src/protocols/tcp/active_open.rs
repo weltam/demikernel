@@ -174,7 +174,7 @@ impl<RT: Runtime> ActiveOpenSocket<RT> {
             .try_into()
             .expect("TODO: Window size overflow");
 
-        trace!("Initializing window_sz {} scale {}", window_size, window_scale);
+        // trace!("Initializing window_sz {} scale {}", window_size, window_scale);
 
         let sender = Sender::new(expected_seq, window_size, window_scale, mss);
         let receiver = Receiver::new(
