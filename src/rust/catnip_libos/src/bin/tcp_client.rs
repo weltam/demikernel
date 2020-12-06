@@ -2,11 +2,9 @@
 #![feature(try_blocks)]
 
 use std::time::Duration;
-use histogram::Histogram;
 use must_let::must_let;
 use std::io::Write;
 use std::str::FromStr;
-use catnip_libos::runtime::DPDKRuntime;
 use anyhow::{
     format_err,
     Error,
@@ -14,48 +12,26 @@ use anyhow::{
 use dpdk_rs::load_mlx5_driver;
 use std::env;
 use catnip::{
-    sync::BytesMut,
-    file_table::FileDescriptor,
-    interop::{
-        dmtr_qresult_t,
-        dmtr_qtoken_t,
-        dmtr_sgarray_t,
-    },
     libos::LibOS,
     logging,
     operations::OperationResult,
     protocols::{
         ip,
-        ipv4::{self, Endpoint},
+        ipv4::{Endpoint},
         ethernet2::MacAddress,
     },
     runtime::Runtime,
     tracing,
 };
-use std::time::Instant;
-use clap::{
-    App,
-    Arg,
-};
-use libc::{
-    c_char,
-    c_int,
-    sockaddr,
-    socklen_t,
-};
 use hashbrown::HashMap;
 use std::{
-    cell::RefCell,
     convert::TryFrom,
     ffi::{
-        CStr,
         CString,
     },
     fs::File,
     io::Read,
-    mem,
     net::Ipv4Addr,
-    slice,
 };
 use yaml_rust::{
     Yaml,
@@ -135,8 +111,6 @@ fn main() {
         let mut libos = LibOS::new(runtime)?;
         let buf_sz: usize = std::env::var("BUFFER_SIZE").unwrap().parse().unwrap();
 
-        let num_iters: usize = std::env::var("NUM_ITERS").unwrap().parse().unwrap();
-
         let connect_addr = &config_obj["client"]["connect_to"];
         let host_s = connect_addr["host"].as_str().expect("Invalid host");
         let host = Ipv4Addr::from_str(host_s).expect("Invalid host");
@@ -182,7 +156,7 @@ fn main() {
             while bytes_popped < buf_sz {
                 let qtoken = libos.pop(sockfd);
                 let popped_buf = loop {
-                    match libos.wait4(qtoken) {
+                    match libos.wait4(qtoken, Duration::from_secs(1)) {
                         None => {
                             if SHUTDOWN.load(Ordering::Relaxed) {
                                 break 'shutdown;

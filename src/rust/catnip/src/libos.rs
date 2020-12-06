@@ -242,7 +242,8 @@ impl<RT: Runtime> LibOS<RT> {
     pub fn wait4(&mut self, qt: QToken, timeout: Duration) -> Option<(FileDescriptor, OperationResult)> {
         let handle = self.rt.scheduler().from_raw_handle(qt).unwrap();
         let mut deadline = None;
-        for i in 0.. {
+        let mut i = 0;
+        loop {
             self.rt.scheduler().poll();
             if handle.has_completed() {
                 return Some(self.take_operation2(handle));
@@ -263,12 +264,15 @@ impl<RT: Runtime> LibOS<RT> {
             }
             self.ts_iters = (self.ts_iters + 1) % TIMER_RESOLUTION;
 
-            if iter >= 25 && deadline.is_none() {
+            i += 1;
+
+            if i >= 25 && deadline.is_none() {
                 deadline = Some(Instant::now() + timeout);
             }
-            if iter % 25 == 0 {
+            if i % 25 == 0 {
                 if let Some(d) = deadline {
                     if Instant::now() >= d {
+                        handle.into_raw();
                         return None
                     }
                 }
