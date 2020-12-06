@@ -239,9 +239,46 @@ impl<RT: Runtime> LibOS<RT> {
         }
     }
 
+    pub fn wait4(&mut self, qt: QToken, timeout: Duration) -> Option<(FileDescriptor, OperationResult)> {
+        let handle = self.rt.scheduler().from_raw_handle(qt).unwrap();
+        let mut deadline = None;
+        for i in 0.. {
+            self.rt.scheduler().poll();
+            if handle.has_completed() {
+                return Some(self.take_operation2(handle));
+            }
+            let mut num_received = 0;
+            while let Some(pkt) = self.rt.receive() {
+                num_received += 1;
+                if let Err(e) = self.engine.receive(pkt) {
+                    warn!("Dropped packet: {:?}", e);
+                }
+                if num_received > MAX_RECV_ITER {
+                    break;
+                }
+            }
+            if self.ts_iters == 0 {
+                // let _t = tracy_client::static_span!("advance_clock");
+                self.rt.advance_clock(Instant::now());
+            }
+            self.ts_iters = (self.ts_iters + 1) % TIMER_RESOLUTION;
+
+            if iter >= 25 && deadline.is_none() {
+                deadline = Some(Instant::now() + timeout);
+            }
+            if iter % 25 == 0 {
+                if let Some(d) = deadline {
+                    if Instant::now() >= d {
+                        return None
+                    }
+                }
+            }
+        }
+    }
+
     pub fn wait_any2(&mut self, qts: &mut Vec<QToken>, timeout: Duration) -> Option<(FileDescriptor, OperationResult)> {
         let mut iter = 0u64;
-        let mut deadline = None; 
+        let mut deadline = None;
         let (i, result) = 'wait: loop {
             self.poll_bg_work();
             for (i, &qt) in qts.iter().enumerate() {
