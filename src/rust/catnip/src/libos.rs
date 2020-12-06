@@ -239,6 +239,20 @@ impl<RT: Runtime> LibOS<RT> {
         }
     }
 
+    pub fn wait_any2(&mut self, qts: &mut Vec<QToken>) -> (FileDescriptor, OperationResult) {
+        let (i, result) = 'wait: loop {
+            self.poll_bg_work();
+            for (i, &qt) in qts.iter().enumerate() {
+                let handle = self.rt.scheduler().from_raw_handle(qt).unwrap();
+                if handle.has_completed() {
+                    break 'wait (i, self.take_operation2(handle));
+                }
+            }
+        };
+        qts.swap_remove(i);
+        result
+    }
+
     pub fn wait_any(&mut self, qts: &[QToken]) -> (usize, dmtr_qresult_t) {
         // let _s = tracy_client::static_span!();
         loop {

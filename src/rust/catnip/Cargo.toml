@@ -43,4 +43,5 @@ dpdk-rs = { git = "https://github.com/sujayakar/dpdk-rs", rev = "fd39ce5a56a79cf
 criterion = "0.3.3"
 
 [features]
+default = ["threadunsafe"]
 threadunsafe = []

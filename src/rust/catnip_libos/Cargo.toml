@@ -19,6 +19,7 @@ yaml-rust = "0.4.4"
 dpdk-rs = { git = "https://github.com/sujayakar/dpdk-rs", rev = "fd39ce5a56a79cfd0b5aadbb076ce815f2b69d9f" }
 must-let = { git = "https://github.com/sujayakar/must-let" }
 histogram = "0.6.9"
+ctrlc = "3.1.7"
 
 # [dependencies.tracy-client]
 # path = "../rust_tracy_client/tracy-client"
