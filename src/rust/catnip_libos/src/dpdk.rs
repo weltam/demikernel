@@ -40,6 +40,8 @@ use dpdk_rs::{
     DEV_RX_OFFLOAD_JUMBO_FRAME,
     RTE_PKTMBUF_HEADROOM,
     DEV_RX_OFFLOAD_TIMESTAMP,
+    DEV_TX_OFFLOAD_TCP_CKSUM,
+    DEV_RX_OFFLOAD_TCP_CKSUM,
 };
 use crate::{
     runtime::DPDKRuntime,
@@ -181,10 +183,11 @@ fn initialize_dpdk_port(port_id: u16, mbuf_pool: *mut rte_mempool) -> Result<(),
     let mut port_conf: rte_eth_conf = unsafe { MaybeUninit::zeroed().assume_init() };
     port_conf.rxmode.max_rx_pkt_len = RTE_ETHER_MAX_JUMBO_FRAME_LEN;
     // port_conf.rxmode.max_rx_pkt_len = RTE_ETHER_MAX_LEN;
-    port_conf.rxmode.offloads = DEV_RX_OFFLOAD_JUMBO_FRAME as u64 | DEV_RX_OFFLOAD_TIMESTAMP as u64;
+    port_conf.rxmode.offloads = DEV_RX_OFFLOAD_JUMBO_FRAME as u64 | DEV_RX_OFFLOAD_TCP_CKSUM as u64;
     // port_conf.rxmode.mq_mode = ETH_MQ_RX_RSS;
     // port_conf.rx_adv_conf.rss_conf.rss_hf = ETH_RSS_IP as u64 | dev_info.flow_type_rss_offloads;
     port_conf.txmode.mq_mode = ETH_MQ_TX_NONE;
+    port_conf.txmode.offloads = DEV_TX_OFFLOAD_TCP_CKSUM as u64;
 
     let mut rx_conf: rte_eth_rxconf = unsafe { MaybeUninit::zeroed().assume_init() };
     rx_conf.rx_thresh.pthresh = rx_pthresh;
