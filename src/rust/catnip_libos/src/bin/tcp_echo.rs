@@ -249,6 +249,8 @@ fn main() {
 
             let exp_start = Instant::now();
             let mut samples = Vec::with_capacity(num_iters);
+            let mut round_timings = Vec::with_capacity(num_iters);
+
             for i in 0..num_iters {
                 // tracing::log("round:start");
                 if log_round {
@@ -290,18 +292,22 @@ fn main() {
                 }
                 assert_eq!(bytes_popped, buf_sz);
                 samples.push(start.elapsed());
+                round_timings.push((start, Instant::now()));
                 if log_round {
                     println!("Done popping");
                 }
                 // tracing::log("round:end");
             }
             let exp_duration = exp_start.elapsed();
-            let throughput = (num_iters as f64 * buf_sz as f64) / exp_duration.as_secs_f64() / 1024. / 1024. / 1024. * 8.;
-            println!("Finished ({} samples, {} Gbps throughput)", num_iters, throughput);
             let mut h = Histogram::configure().precision(4).build().unwrap();
+            let mut total_duration = 0.;
             for s in &samples[2..] {
                 h.increment(s.as_nanos() as u64).unwrap();
+                total_duration += s.as_secs_f64();
             }
+            let throughput = ((samples.len() - 2) as f64 * buf_sz as f64) / total_duration / 1024. / 1024. / 1024. * 8.;
+            // let throughput = (num_iters as f64 * buf_sz as f64) / exp_duration.as_secs_f64() / 1024. / 1024. / 1024. * 8.;
+            println!("Finished ({} samples, {} Gbps throughput)", num_iters, throughput);
             print_histogram(&h);
         }
         else {

@@ -21,7 +21,7 @@ use crate::{
 use libc::c_int;
 use std::{
     slice,
-    time::Instant,
+    time::{Instant, Duration},
 };
 
 const TIMER_RESOLUTION: usize = 64;
@@ -239,7 +239,9 @@ impl<RT: Runtime> LibOS<RT> {
         }
     }
 
-    pub fn wait_any2(&mut self, qts: &mut Vec<QToken>) -> (FileDescriptor, OperationResult) {
+    pub fn wait_any2(&mut self, qts: &mut Vec<QToken>, timeout: Duration) -> Option<(FileDescriptor, OperationResult)> {
+        let mut iter = 0u64;
+        let mut deadline = None; 
         let (i, result) = 'wait: loop {
             self.poll_bg_work();
             for (i, &qt) in qts.iter().enumerate() {
@@ -247,10 +249,24 @@ impl<RT: Runtime> LibOS<RT> {
                 if handle.has_completed() {
                     break 'wait (i, self.take_operation2(handle));
                 }
+                handle.into_raw();
+            }
+
+            iter += 1;
+
+            if iter >= 25 && deadline.is_none() {
+                deadline = Some(Instant::now() + timeout);
+            }
+            if iter % 25 == 0 {
+                if let Some(d) = deadline {
+                    if Instant::now() >= d {
+                        return None
+                    }
+                }
             }
         };
         qts.swap_remove(i);
-        result
+        Some(result)
     }
 
     pub fn wait_any(&mut self, qts: &[QToken]) -> (usize, dmtr_qresult_t) {

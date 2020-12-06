@@ -40,17 +40,23 @@ impl Port {
 }
 
 pub struct EphemeralPorts {
+    first_port: u16,
     bits: BitSet,
 }
 
 impl EphemeralPorts {
     pub fn new() -> Self {
-        let num_ephemeral = 65535 - FIRST_PRIVATE_PORT;
+        let mut first_port = FIRST_PRIVATE_PORT;
+        if let Ok(p) = std::env::var("FIRST_PRIVATE_PORT") {
+            first_port = p.parse().unwrap();
+            println!("Overriding first private port to {}", first_port);
+        }
+        let num_ephemeral = 65535 - first_port; 
         let mut bits = BitSet::with_capacity(num_ephemeral as usize);
         for i in 0..num_ephemeral {
             bits.set(i as usize);
         }
-        Self { bits }
+        Self { bits, first_port }
     }
 
     pub fn alloc(&mut self) -> Result<Port, Fail> {
@@ -58,7 +64,7 @@ impl EphemeralPorts {
             Some(i) => {
                 self.bits.clear(i);
                 Ok(Port(
-                    NonZeroU16::new(FIRST_PRIVATE_PORT + i as u16).unwrap(),
+                    NonZeroU16::new(self.first_port + i as u16).unwrap(),
                 ))
             },
             None => Err(Fail::ResourceExhausted {
@@ -68,6 +74,6 @@ impl EphemeralPorts {
     }
 
     pub fn free(&mut self, port: Port) {
-        self.bits.set((port.0.get() - FIRST_PRIVATE_PORT) as usize)
+        self.bits.set((port.0.get() - self.first_port) as usize)
     }
 }

@@ -1,6 +1,7 @@
 #![feature(maybe_uninit_uninit_array)]
 #![feature(try_blocks)]
 
+use std::time::Duration;
 use std::io::Write;
 use std::str::FromStr;
 use anyhow::{
@@ -123,21 +124,20 @@ fn main() {
         let mut num_connections = 0;
 
         while !SHUTDOWN.load(Ordering::Relaxed) {
-            let (fd, result) = libos.wait_any2(&mut qtokens);
-            match result {
-                OperationResult::Accept(new_fd) => {
+            match libos.wait_any2(&mut qtokens, Duration::from_secs(1)) {
+                None => continue,
+                Some((fd, OperationResult::Accept(new_fd))) => {
                     num_connections += 1;
                     println!("Accepted new connection, managing {} connections", num_connections);
                     assert_eq!(fd, sockfd);
                     qtokens.push(libos.accept(sockfd));
                     qtokens.push(libos.pop(new_fd));
                 },
-                OperationResult::Pop(_, buf) => {
-                    println!("Echoing {} bytes", buf.len());
+                Some((fd, OperationResult::Pop(_, buf))) => {
                     qtokens.push(libos.push2(fd, buf));
                     qtokens.push(libos.pop(fd));
                 },
-                OperationResult::Push => (),
+                Some((fd, OperationResult::Push)) => (),
                 e => panic!("Unexpected operation result: {:?}", e),
             }
         }

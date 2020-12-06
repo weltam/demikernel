@@ -448,6 +448,7 @@ impl<RT: Runtime> Inner<RT> {
         let (tcp_hdr, data) = TcpHeader::parse(ip_hdr, buf)?;
         let local = ipv4::Endpoint::new(ip_hdr.dst_addr, tcp_hdr.dst_port);
         let remote = ipv4::Endpoint::new(ip_hdr.src_addr, tcp_hdr.src_port);
+        trace!("Receiving {:?} -> {:?}: {:?}", remote, local, tcp_hdr);
 
         if remote.addr.is_broadcast() || remote.addr.is_multicast() || remote.addr.is_unspecified()
         {
