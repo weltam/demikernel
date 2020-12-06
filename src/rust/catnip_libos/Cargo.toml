@@ -16,8 +16,7 @@ hashbrown = { version = "0.9", features = ["nightly"] }
 libc = "0.2.77"
 rand = { version = "0.7.3", features = ["small_rng"] }
 yaml-rust = "0.4.4"
-# dpdk-rs = { git = "https://github.com/sujayakar/dpdk-rs", rev = "66d2b6058dc047975a4945bedf44a93a9c19226a" }
-dpdk-rs = { path = "../../../../dpdk-rs" }
+dpdk-rs = { git = "https://github.com/sujayakar/dpdk-rs", rev = "fd39ce5a56a79cfd0b5aadbb076ce815f2b69d9f" }
 must-let = { git = "https://github.com/sujayakar/must-let" }
 histogram = "0.6.9"
 
