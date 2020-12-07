@@ -96,14 +96,17 @@ pub fn initialize_dpdk(
 
     let name = CString::new("default_mbuf_pool").unwrap();
     let num_mbufs: usize = std::env::var("NUM_MBUFS").unwrap().parse().unwrap();
-    let mbuf_cache_size = 250;
+    let mbuf_cache_size = std::env::var("MBUF_CACHE_SIZE").map(|r| r.parse().unwrap()).unwrap_or(0usize);
+    let use_jumbo = std::env::var("USE_JUMBO").is_ok();
+    let sz = if use_jumbo { RTE_ETHER_MAX_JUMBO_FRAME_LEN + RTE_PKTMBUF_HEADROOM } else { RTE_MBUF_DEFAULT_BUF_SIZE };
     let mbuf_pool = unsafe {
         rte_pktmbuf_pool_create(
             name.as_ptr(),
             num_mbufs as u32,
-            mbuf_cache_size,
+            mbuf_cache_size as u32,
             0,
-            (RTE_ETHER_MAX_JUMBO_FRAME_LEN + RTE_PKTMBUF_HEADROOM) as u16,
+            sz as u16,
+            // (RTE_ETHER_MAX_JUMBO_FRAME_LEN + RTE_PKTMBUF_HEADROOM) as u16,
             // RTE_MBUF_DEFAULT_BUF_SIZE as u16,
             rte_socket_id() as i32,
         )
@@ -165,17 +168,24 @@ fn initialize_dpdk_port(port_id: u16, mbuf_pool: *mut rte_mempool) -> Result<(),
     println!("dev_info: {:?}", dev_info);
     let mtu: u16 = std::env::var("MTU").unwrap().parse().unwrap();
     unsafe {
-        // expect_zero!(rte_eth_dev_set_mtu(port_id, RTE_ETHER_MAX_JUMBO_FRAME_LEN as u16))?;
         expect_zero!(rte_eth_dev_set_mtu(port_id, mtu))?;
         let mut mtu = 0u16;
         expect_zero!(rte_eth_dev_get_mtu(port_id, &mut mtu as *mut _))?;
         println!("DPDK MTU: {}", mtu);
     }
 
+    let use_jumbo = std::env::var("USE_JUMBO").is_ok();
+
     let mut port_conf: rte_eth_conf = unsafe { MaybeUninit::zeroed().assume_init() };
-    port_conf.rxmode.max_rx_pkt_len = RTE_ETHER_MAX_JUMBO_FRAME_LEN;
-    // port_conf.rxmode.max_rx_pkt_len = RTE_ETHER_MAX_LEN;
-    port_conf.rxmode.offloads = DEV_RX_OFFLOAD_JUMBO_FRAME as u64 | DEV_RX_OFFLOAD_TCP_CKSUM as u64;
+    if use_jumbo {
+        port_conf.rxmode.max_rx_pkt_len = RTE_ETHER_MAX_JUMBO_FRAME_LEN;
+    } else {
+        port_conf.rxmode.max_rx_pkt_len = RTE_ETHER_MAX_LEN;
+    }
+    port_conf.rxmode.offloads = DEV_RX_OFFLOAD_TCP_CKSUM as u64;
+    if use_jumbo {
+        port_conf.rxmode.offloads |= DEV_RX_OFFLOAD_JUMBO_FRAME as u64;
+    }
     // port_conf.rxmode.mq_mode = ETH_MQ_RX_RSS;
     // port_conf.rx_adv_conf.rss_conf.rss_hf = ETH_RSS_IP as u64 | dev_info.flow_type_rss_offloads;
     port_conf.txmode.mq_mode = ETH_MQ_TX_NONE;

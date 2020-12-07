@@ -152,6 +152,7 @@ fn main() {
         // }
         let num_clients: usize = std::env::var("NUM_CLIENTS").unwrap().parse().unwrap();
         let mut qtokens = Vec::with_capacity(num_clients);
+        error!("Starting with {} clients", num_clients);
         
         for _ in 0..num_clients {
             let sockfd = libos.socket(libc::AF_INET, libc::SOCK_STREAM, 0)?;

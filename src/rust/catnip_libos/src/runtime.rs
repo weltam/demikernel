@@ -180,7 +180,7 @@ impl Runtime for DPDKRuntime {
         if pkt.is_null() {
             panic!("Failed to allocate packet, current pool size: {}", pool_size);
         } 
-        // trace!("Allocated packet (pool size {})", pool_size);
+        trace!("Allocated packet (pool size {})", pool_size);
 
         match buf.serialize2() {
             Ok(mut mbuf) => {
@@ -215,7 +215,7 @@ impl Runtime for DPDKRuntime {
             }
         }
         // unsafe { dpdk_rs::rte_mbuf_refcnt_update(pkt, 1) };
-        / /let pool_size = unsafe { dpdk_rs::rte_mempool_avail_count(pool) };
+        // let pool_size = unsafe { dpdk_rs::rte_mempool_avail_count(pool) };
         // trace!("refcnt before: {}, pool_size {}", unsafe {dpdk_rs::rte_mbuf_refcnt_read(pkt)}, pool_size);
         let num_sent = unsafe {
             (*pkt).data_len = size as u16;

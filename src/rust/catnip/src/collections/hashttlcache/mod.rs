@@ -166,6 +166,7 @@ where
     }
 
     pub fn remove(&mut self, key: &K) -> Option<V> {
+        debug!("Removing something");
         if let Some(ref record) = self.map.remove(key) {
             if let Some(ref expiry) = record.expiry {
                 if !expiry.has_expired(self.clock) {
@@ -181,7 +182,7 @@ where
     where
         K: Debug,
     {
-        // trace!("HashTtlCache::get({:?})", key);
+        debug!("HashTtlCache::get({:?})", key);
         debug!("self.map.len() -> {:?}", self.map.len());
         match self.map.get(key) {
             None => {
@@ -213,6 +214,7 @@ where
 
     pub fn try_evict(&mut self, count: usize) -> HashMap<K, V> {
         let mut evicted = HashMap::default();
+        return evicted;
         let mut i = 0;
 
         loop {
@@ -231,6 +233,7 @@ where
     }
 
     fn try_evict_once(&mut self) -> Option<(K, V)> {
+        return None;
         loop {
             let (key, graveyard_expiry) = match self.graveyard.peek() {
                 Some(e) => ((*e).key.clone(), (*e).expiry.clone()),
@@ -287,6 +290,7 @@ where
     }
 
     pub fn clear(&mut self) {
+        debug!("Clearing ARP cache");
         self.map.clear();
         self.graveyard.clear();
     }

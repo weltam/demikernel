@@ -79,6 +79,7 @@ impl ArpCache {
     }
 
     pub fn insert(&mut self, ipv4_addr: Ipv4Addr, link_addr: MacAddress) -> Option<MacAddress> {
+        trace!("Inserting {:?} -> {:?}", ipv4_addr, link_addr);
         let record = Record {
             ipv4_addr,
             link_addr,

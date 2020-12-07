@@ -118,7 +118,7 @@ fn main() {
 
         let sockfd = libos.socket(libc::AF_INET, libc::SOCK_STREAM, 0)?;
         libos.bind(sockfd, endpoint)?;
-        libos.listen(sockfd, 10)?;
+        libos.listen(sockfd, 1024)?;
 
         let mut qtokens = Vec::with_capacity(1024);
         qtokens.push(libos.accept(sockfd));
