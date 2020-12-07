@@ -92,6 +92,7 @@ impl ArpCache {
     }
 
     pub fn remove(&mut self, ipv4_addr: Ipv4Addr) {
+        return;
         if let Some(record) = self.cache.remove(&ipv4_addr) {
             assert!(self.rmap.remove(&record.link_addr).is_some());
         } else {
@@ -133,14 +134,15 @@ impl ArpCache {
     }
 
     pub fn try_evict(&mut self, count: usize) -> HashMap<Ipv4Addr, MacAddress> {
-        let evicted = self.cache.try_evict(count);
+        // let evicted = self.cache.try_evict(count);
         let mut result = HashMap::default();
-        for (k, v) in &evicted {
-            self.rmap.remove(&v.link_addr);
-            assert!(result.insert(*k, v.link_addr).is_none());
-        }
+        return result;
+        // for (k, v) in &evicted {
+        //     self.rmap.remove(&v.link_addr);
+        //     assert!(result.insert(*k, v.link_addr).is_none());
+        // }
 
-        result
+        // result
     }
 
     pub fn clear(&mut self) {
@@ -159,6 +161,7 @@ impl ArpCache {
 
     pub fn import(&mut self, cache: HashMap<Ipv4Addr, MacAddress>) {
         self.clear();
+        info!("Importing {:?}", cache);
         for (k, v) in &cache {
             self.insert(k.clone(), v.clone());
         }

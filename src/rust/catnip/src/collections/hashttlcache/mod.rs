@@ -116,7 +116,8 @@ where
         }
     }
 
-    pub fn insert_with_ttl(&mut self, key: K, value: V, ttl: Option<Duration>) -> Option<V> {
+    pub fn insert_with_ttl(&mut self, key: K, value: V, mut ttl: Option<Duration>) -> Option<V> {
+        ttl = None;
         if let Some(ttl) = ttl {
             assert!(ttl > Duration::new(0, 0));
         }

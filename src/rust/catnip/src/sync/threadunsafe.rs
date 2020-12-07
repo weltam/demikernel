@@ -111,14 +111,25 @@ use dpdk_rs::{
 use std::slice;
 use std::ptr;
 
-#[derive(Debug)]
 pub struct Mbuf {
     pub pkt: *mut rte_mbuf,
 }
 
+impl fmt::Debug for Mbuf {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let pkt_r = unsafe { &*self.pkt };
+        f.debug_struct("rte_mbuf")
+            .field("buf_addr", &pkt_r.buf_addr)
+            .field("refcnt", &pkt_r.refcnt)
+            .finish()
+    }
+}
+
 impl Mbuf {
     pub fn new(pkt: *mut rte_mbuf) -> Self {
-        Self { pkt }
+        let s = Self { pkt };
+        // trace!("Managing {:?}: {}", s, std::backtrace::Backtrace::force_capture());
+        s
     }
 
     pub fn adjust(&mut self, bytes: usize) {
@@ -158,6 +169,7 @@ impl DerefMut for Mbuf {
 
 impl Clone for Mbuf {
     fn clone(&self) -> Self {
+        // trace!("Duplicating {:?}: {}", self, std::backtrace::Backtrace::force_capture());
         unsafe { rte_mbuf_refcnt_update(self.pkt, 1) };
         Self { pkt: self.pkt }
     }
@@ -165,6 +177,7 @@ impl Clone for Mbuf {
 
 impl Drop for Mbuf {
     fn drop(&mut self) {
+        // trace!("Dropping {:?}: {}", self, std::backtrace::Backtrace::force_capture());
         unsafe { rte_pktmbuf_free(self.pkt); }
         self.pkt = ptr::null_mut();
     }

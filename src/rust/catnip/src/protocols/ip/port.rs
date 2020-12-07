@@ -60,20 +60,25 @@ impl EphemeralPorts {
     }
 
     pub fn alloc(&mut self) -> Result<Port, Fail> {
-        match self.bits.iter().next() {
-            Some(i) => {
-                self.bits.clear(i);
-                Ok(Port(
-                    NonZeroU16::new(self.first_port + i as u16).unwrap(),
-                ))
-            },
-            None => Err(Fail::ResourceExhausted {
-                details: "Out of private ports",
-            }),
-        }
+        let p = self.first_port;
+        self.first_port += 1;
+        return Ok(Port(NonZeroU16::new(p).unwrap()));
+        // trace!("Allocating port");
+        // match self.bits.iter().next() {
+        //     Some(i) => {
+        //         self.bits.clear(i);
+        //         Ok(Port(
+        //             NonZeroU16::new(self.first_port + i as u16).unwrap(),
+        //         ))
+        //     },
+        //     None => Err(Fail::ResourceExhausted {
+        //         details: "Out of private ports",
+        //     }),
+        // }
     }
 
     pub fn free(&mut self, port: Port) {
-        self.bits.set((port.0.get() - self.first_port) as usize)
+        // trace!("Freeing port {}", port.0.get());
+        // self.bits.set((port.0.get() - self.first_port) as usize)
     }
 }

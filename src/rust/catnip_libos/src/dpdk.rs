@@ -95,12 +95,12 @@ pub fn initialize_dpdk(
     );
 
     let name = CString::new("default_mbuf_pool").unwrap();
-    let num_mbufs = 8192;
+    let num_mbufs: usize = std::env::var("NUM_MBUFS").unwrap().parse().unwrap();
     let mbuf_cache_size = 250;
     let mbuf_pool = unsafe {
         rte_pktmbuf_pool_create(
             name.as_ptr(),
-            (num_mbufs * nb_ports) as u32,
+            num_mbufs as u32,
             mbuf_cache_size,
             0,
             (RTE_ETHER_MAX_JUMBO_FRAME_LEN + RTE_PKTMBUF_HEADROOM) as u16,
@@ -157,14 +157,6 @@ fn initialize_dpdk_port(port_id: u16, mbuf_pool: *mut rte_mempool) -> Result<(),
     let nb_rxd = rx_ring_size;
     let nb_txd = tx_ring_size;
 
-    let rx_pthresh = 8;
-    let rx_hthresh = 8;
-    let rx_wthresh = 0;
-
-    let tx_pthresh = 0;
-    let tx_hthresh = 0;
-    let tx_wthresh = 0;
-
     let dev_info = unsafe {
         let mut d = MaybeUninit::zeroed();
         rte_eth_dev_info_get(port_id, d.as_mut_ptr());
@@ -190,16 +182,18 @@ fn initialize_dpdk_port(port_id: u16, mbuf_pool: *mut rte_mempool) -> Result<(),
     port_conf.txmode.offloads = DEV_TX_OFFLOAD_TCP_CKSUM as u64;
 
     let mut rx_conf: rte_eth_rxconf = unsafe { MaybeUninit::zeroed().assume_init() };
-    rx_conf.rx_thresh.pthresh = rx_pthresh;
-    rx_conf.rx_thresh.hthresh = rx_hthresh;
-    rx_conf.rx_thresh.wthresh = rx_wthresh;
-    rx_conf.rx_free_thresh = 32;
+    rx_conf.rx_thresh.pthresh = 8;
+    rx_conf.rx_thresh.hthresh = 0;
+    rx_conf.rx_thresh.wthresh = 0;
+    rx_conf.rx_free_thresh = 0;
+    rx_conf.rx_drop_en = 0;
 
     let mut tx_conf: rte_eth_txconf = unsafe { MaybeUninit::zeroed().assume_init() };
-    tx_conf.tx_thresh.pthresh = tx_pthresh;
-    tx_conf.tx_thresh.hthresh = tx_hthresh;
-    tx_conf.tx_thresh.wthresh = tx_wthresh;
-    // tx_conf.tx_free_thresh = 32;
+    tx_conf.tx_thresh.pthresh = 32;
+    tx_conf.tx_thresh.hthresh = 0;
+    tx_conf.tx_thresh.wthresh = 0;
+    tx_conf.tx_free_thresh = 0;
+    tx_conf.tx_rs_thresh = 0;
 
     unsafe {
         expect_zero!(rte_eth_dev_configure(

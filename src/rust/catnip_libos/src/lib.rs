@@ -3,7 +3,8 @@
 #![feature(try_blocks)]
 #![feature(const_fn, const_type_name, const_mut_refs)]
 #![feature(new_uninit)]
-
+#[macro_use]
+extern crate log;
 use catnip::{
     file_table::FileDescriptor,
     interop::{

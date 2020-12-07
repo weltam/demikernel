@@ -176,10 +176,15 @@ impl Runtime for DPDKRuntime {
         // catnip::tracing::log("pktmbuf_alloc:start");
         let mut pkt = unsafe { rte_pktmbuf_alloc(pool) };
         // catnip::tracing::log("pktmbuf_alloc:end");
-        assert!(!pkt.is_null());
+        let pool_size = unsafe { dpdk_rs::rte_mempool_avail_count(pool) };
+        if pkt.is_null() {
+            panic!("Failed to allocate packet, current pool size: {}", pool_size);
+        } 
+        // trace!("Allocated packet (pool size {})", pool_size);
 
         match buf.serialize2() {
             Ok(mut mbuf) => {
+                // trace!("Sending (and leaking): {:?}", mbuf);
                 let nb_tx = unsafe {
                     rte_eth_tx_burst(dpdk_port_id, 0, &mut mbuf.pkt as *mut _, 1)
                 };
@@ -210,8 +215,8 @@ impl Runtime for DPDKRuntime {
             }
         }
         // unsafe { dpdk_rs::rte_mbuf_refcnt_update(pkt, 1) };
-        // let pool_size = unsafe { dpdk_rs::rte_mempool_avail_count(pool) };
-        // println!("refcnt before: {}, pool_size {}", unsafe {dpdk_rs::rte_mbuf_refcnt_read(pkt)}, pool_size);
+        / /let pool_size = unsafe { dpdk_rs::rte_mempool_avail_count(pool) };
+        // trace!("refcnt before: {}, pool_size {}", unsafe {dpdk_rs::rte_mbuf_refcnt_read(pkt)}, pool_size);
         let num_sent = unsafe {
             (*pkt).data_len = size as u16;
             (*pkt).pkt_len = size as u32;
@@ -295,6 +300,8 @@ impl Runtime for DPDKRuntime {
 
                 // unsafe { rte_pktmbuf_free(packet as *const _ as *mut _) };
             }
+            // let pool_size = unsafe { dpdk_rs::rte_mempool_avail_count(inner.dpdk_mempool) };
+            // trace!("End of receive pool size: {}", pool_size);
         }
     }
 

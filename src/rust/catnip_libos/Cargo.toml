@@ -20,6 +20,7 @@ dpdk-rs = { git = "https://github.com/sujayakar/dpdk-rs", rev = "fd39ce5a56a79cf
 must-let = { git = "https://github.com/sujayakar/must-let" }
 histogram = "0.6.9"
 ctrlc = "3.1.7"
+log = "0.4"
 
 # [dependencies.tracy-client]
 # path = "../rust_tracy_client/tracy-client"

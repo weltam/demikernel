@@ -1,7 +1,10 @@
 #![feature(maybe_uninit_uninit_array)]
 #![feature(try_blocks)]
 
-use std::time::Duration;
+#[macro_use]
+extern crate log;
+
+use std::time::{Instant, Duration};
 use must_let::must_let;
 use std::io::Write;
 use std::str::FromStr;
@@ -118,59 +121,111 @@ fn main() {
         let port = ip::Port::try_from(port_i as u16)?;
         let endpoint = Endpoint::new(host, port);
 
-        let sockfd = libos.socket(libc::AF_INET, libc::SOCK_STREAM, 0)?;
-        let qtoken = libos.connect(sockfd, endpoint);
-        must_let!(let (_, OperationResult::Connect) = libos.wait2(qtoken));
 
         let mss: usize = std::env::var("MSS").unwrap().parse().unwrap();
         let hdr_size = 54;
 
         let num_bufs = (buf_sz - 1) / mss + 1;
-        let mut bufs = Vec::with_capacity(num_bufs);
+        assert_eq!(num_bufs, 1);
+        let mut pktmbuf = libos.rt().alloc_mbuf();
+        for i in hdr_size..(hdr_size + buf_sz) {
+            pktmbuf[i] = 'a' as u8;
+        }
+        let buf = catnip::sync::Bytes::from_obj(catnip::sync::BufEnum::DPDK(pktmbuf));
+        let (_, buf) = buf.split(hdr_size);
+        let (buf, _) = buf.split(buf_sz);
 
-        for i in 0..num_bufs {
-            let start = i * mss;
-            let end = std::cmp::min(start + mss, buf_sz);
-            let len = end - start;
-            let mut pktbuf: catnip::sync::Mbuf = libos.rt().alloc_mbuf();
-            for j in hdr_size..(hdr_size + len) {
-                pktbuf[j] = 'a' as u8;
-            }
-            let buf = catnip::sync::Bytes::from_obj(catnip::sync::BufEnum::DPDK(pktbuf));
-            let (_, buf) = buf.split(hdr_size);
-            let (buf, _) = buf.split(len);
-            println!("Buf {}, {} bytes", i, buf.len());
-            bufs.push(buf);
+        // let mut bufs = Vec::with_capacity(num_bufs);
+        // for i in 0..num_bufs {
+        //     let start = i * mss;
+        //     let end = std::cmp::min(start + mss, buf_sz);
+        //     let len = end - start;
+        //     let mut pktbuf: catnip::sync::Mbuf = libos.rt().alloc_mbuf();
+        //     for j in hdr_size..(hdr_size + len) {
+        //         pktbuf[j] = 'a' as u8;
+        //     }
+        //     let buf = catnip::sync::Bytes::from_obj(catnip::sync::BufEnum::DPDK(pktbuf));
+        //     let (_, buf) = buf.split(hdr_size);
+        //     let (buf, _) = buf.split(len);
+        //     println!("Buf {}, {} bytes", i, buf.len());
+        //     bufs.push(buf);
+        // }
+        let num_clients: usize = std::env::var("NUM_CLIENTS").unwrap().parse().unwrap();
+        let mut qtokens = Vec::with_capacity(num_clients);
+        
+        for _ in 0..num_clients {
+            let sockfd = libos.socket(libc::AF_INET, libc::SOCK_STREAM, 0)?;
+            let qtoken = libos.connect(sockfd, endpoint);
+            qtokens.push(qtoken);
+        }
+        let mut i = 1;
+        let logging_interval = Duration::from_secs(1);
+        let mut last_log = Instant::now();
+        let mut starts = std::collections::HashMap::with_capacity(num_clients);
+        let mut h = histogram::Histogram::configure().precision(4).build().unwrap();
+        while !SHUTDOWN.load(Ordering::Relaxed) {
+           if i % 2 == 0 {
+               let now = Instant::now();
+               if now - last_log > logging_interval {
+                   last_log = now;
+                   let _ = print_histogram(&h);
+               }
+           }
+           i += 1;
+
+           match libos.wait_any2(&mut qtokens, Duration::from_secs(1)) {
+               None => continue,
+               Some((fd, OperationResult::Connect)) => {
+                   trace!("Connected {}", fd);
+                   starts.insert(fd, Instant::now());
+                   qtokens.push(libos.push2(fd, buf.clone()));
+               },
+               Some((fd, OperationResult::Pop(_, popped_buf))) => {
+                   trace!("Popped {} bytes from {}", popped_buf.len(), fd);
+                   let duration = starts.remove(&fd).unwrap().elapsed();
+                   h.increment(duration.as_nanos() as u64).unwrap();
+                   libos.rt().donate_buffer(popped_buf);
+                   starts.insert(fd, Instant::now());
+                   qtokens.push(libos.push2(fd, buf.clone()));
+               },
+               Some((fd, OperationResult::Push)) => {
+                   trace!("Pushed on {}", fd);
+                   qtokens.push(libos.pop(fd));
+               },
+               e => panic!("Unexpected {:?}", e),
+           }
         }
 
-        let mut push_tokens = Vec::with_capacity(num_bufs);
-        'shutdown: while !SHUTDOWN.load(Ordering::Relaxed) {
-            assert!(push_tokens.is_empty());
-            for b in &bufs {
-                let qtoken = libos.push2(sockfd, b.clone());
-                push_tokens.push(qtoken);
-            }
-            libos.wait_all_pushes(&mut push_tokens);
+        // let mut push_tokens = Vec::with_capacity(num_bufs);
+        // 'shutdown: while !SHUTDOWN.load(Ordering::Relaxed) {
+        //     assert!(push_tokens.is_empty());
+        //     for b in &bufs {
+        //         let qtoken = libos.push2(sockfd, b.clone());
+        //         push_tokens.push(qtoken);
+        //     }
+        //     libos.wait_all_pushes(&mut push_tokens);
+        //     trace!("Done pushing");
 
-            let mut bytes_popped = 0;
-            while bytes_popped < buf_sz {
-                let qtoken = libos.pop(sockfd);
-                let popped_buf = loop {
-                    match libos.wait4(qtoken, Duration::from_secs(1)) {
-                        None => {
-                            if SHUTDOWN.load(Ordering::Relaxed) {
-                                break 'shutdown;
-                            }
-                        },
-                        Some((_, OperationResult::Pop(_, popped_buf))) => break popped_buf,
-                        e => panic!("Unexpected return: {:?}", e),
-                    }
-                };
-                bytes_popped += popped_buf.len();
-                libos.rt().donate_buffer(popped_buf);
-            }
-            assert_eq!(bytes_popped, buf_sz);
-        }
+        //     let mut bytes_popped = 0;
+        //     while bytes_popped < buf_sz {
+        //         let qtoken = libos.pop(sockfd);
+        //         let popped_buf = loop {
+        //             match libos.wait4(qtoken, Duration::from_secs(1)) {
+        //                 None => {
+        //                     if SHUTDOWN.load(Ordering::Relaxed) {
+        //                         break 'shutdown;
+        //                     }
+        //                 },
+        //                 Some((_, OperationResult::Pop(_, popped_buf))) => break popped_buf,
+        //                 e => panic!("Unexpected return: {:?}", e),
+        //             }
+        //         };
+        //         bytes_popped += popped_buf.len();
+        //         libos.rt().donate_buffer(popped_buf);
+        //     }
+        //     assert_eq!(bytes_popped, buf_sz);
+        //     trace!("Done popping");
+        // }
 
         let (events, num_overflow) = tracing::dump();
         println!("Dropped {} tracing events", num_overflow);
@@ -182,4 +237,14 @@ fn main() {
 
     };
     r.unwrap_or_else(|e| panic!("Initialization failure: {:?}", e));
+}
+
+fn print_histogram(h: &histogram::Histogram) -> Result<(), &'static str> {
+    println!("p25  {:?}", Duration::from_nanos(h.percentile(0.25)?));
+    println!("p50  {:?}", Duration::from_nanos(h.percentile(0.50)?));
+    println!("p75  {:?}", Duration::from_nanos(h.percentile(0.75)?));
+    println!("p95  {:?}", Duration::from_nanos(h.percentile(0.95)?));
+    println!("p99  {:?}", Duration::from_nanos(h.percentile(0.99)?));
+    println!("Avg: {:?}", Duration::from_nanos(h.mean()?));
+    Ok(())
 }

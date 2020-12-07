@@ -7,7 +7,7 @@
 
 # sudo PCI_WHITELIST="0000:12:00.0" ~/proj/demikernel/submodules/spdk/scripts/setup.sh config
 echo 1024 | sudo tee /sys/devices/system/node/node*/hugepages/hugepages-2048kB/nr_hugepages
-mkdir /mnt/huge || true
+mkdir -p /mnt/huge || true
 mount -t hugetlbfs nodev /mnt/huge
 modprobe ib_uverbs
 modprobe mlx4_ib
