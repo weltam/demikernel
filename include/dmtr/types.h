@@ -13,6 +13,7 @@ extern "C" {
 #endif
 
 //#define DMTR_ALLOCATE_SEGMENTS
+// for cornflakes
 #define DMTR_SGARRAY_MAXSIZE 1
 #define DMTR_HEADER_MAGIC 0x10102010
 #define QD_OFFSET 32ul

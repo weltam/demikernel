@@ -45,6 +45,7 @@ struct external_memory_config {
     size_t num_pages;
     uint16_t buf_size;
     struct ::rte_mbuf_ext_shared_info *shinfo;
+    uint64_t ext_mem_iova;
 } typedef ext_mem_cfg_t;
 
 namespace dmtr {
@@ -56,6 +57,8 @@ class lwip_queue : public io_queue {
     protected: static struct rte_mempool *header_mbuf_pool; // for the payload with header
     protected: static struct rte_mempool *payload_mbuf_pool1; // for payload with main size segment
     protected: static struct rte_mempool *payload_mbuf_pool2; // for end segment
+    protected: static struct rte_mempool *extbuf_mbuf_pool;
+    protected: static int num_sent;
     protected: static bool our_dpdk_init_flag;
     protected: static boost::optional<uint16_t> our_dpdk_port_id;
     // demultiplexing incoming packets into queues
@@ -102,7 +105,7 @@ class lwip_queue : public io_queue {
 
     public: static int init_dpdk(int argc, char *argv[]);
     public: static int finish_dpdk_init(YAML::Node &config);
-    public: static int init_ext_mem();
+    public: static int init_ext_mem(void *mmap_addr, uint16_t *mmap_len);
     public: static void free_external_buffer_callback(void *addr, void *opaque);
     protected: static int get_dpdk_port_id(uint16_t &id_out);
     protected: static int ip_sum(uint16_t &sum_out, const uint16_t *hdr, int hdr_len);
@@ -125,7 +128,7 @@ class lwip_queue : public io_queue {
     }
 
     public: static int set_zero_copy();
-    public: static int set_use_external_memory();
+    public: static int set_use_external_memory(void *mmap_addr, uint16_t *mmap_len);
     public: static int init_mempools(uint32_t message_size, uint32_t num_segments);
     private: static void * get_data_pointer(struct rte_mbuf* pkt, bool has_header);
     private: size_t get_header_size();

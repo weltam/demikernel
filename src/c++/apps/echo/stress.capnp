@@ -2,7 +2,6 @@
 
 struct GetMessageCP {
     key @0 :Text;
-    id @1 :Int32;
 }
 
 struct PutMessageCP {

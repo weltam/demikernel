@@ -189,7 +189,7 @@ int dmtr_set_zero_copy() {
     return 0;
 }
 
-int dmtr_set_external_memory() {
+int dmtr_set_external_memory(void *mmap_addr, uint16_t *mmap_len) {
     return 0;
 }
 

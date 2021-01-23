@@ -33,7 +33,7 @@
 #define LATENCY_NUM_BUCKETS 65
 
 // The maximum number of iterations we will record latencies for
-#define MAX_ITERATIONS 1000000
+#define MAX_ITERATIONS 1500000
 
 typedef boost::chrono::duration<uint64_t, boost::nano> duration_type;
 

@@ -7,6 +7,8 @@
 #include "flatbuffers.hh"
 #include "protobuf.hh"
 #include "protobytes.hh"
+#include "stress_cornflakes.hh"
+#include "cornflakes.hh"
 #include "extra_malloc.hh"
 #include "extra_malloc_no_str.hh"
 #include "extra_malloc_no_malloc.hh"
@@ -78,6 +80,7 @@ void sig_handler(int signo)
 
 int main(int argc, char *argv[]) {
     parse_args(argc, argv, false);
+    std::cout << "Num concurrent clients " << clients << std::endl;
     // SGAs will be allocated with this many segments
     int num_send_segments = sga_size;
     int num_recv_segments = 1;
@@ -119,9 +122,13 @@ int main(int argc, char *argv[]) {
     malloc_baseline_no_str malloc_baseline_no_str(packet_size, message);
     malloc_baseline_no_malloc malloc_baseline_no_malloc(packet_size, message);
     malloc_baseline_single_memcpy malloc_baseline_single_memcpy(packet_size, message);
+    cornflakes_echo corn_echo(packet_size, message);
 
+    // context for serialize function
     capnp::MallocMessageBuilder message_builder;
     flatbuffers::FlatBufferBuilder fb_builder(packet_size);
+    cornflakes::GetMessageCF cornflakes_get;
+
     void *context = NULL;
     if (zero_copy) {
         dmtr_set_zero_copy();
@@ -173,6 +180,17 @@ int main(int argc, char *argv[]) {
             allocate_segments(&sga, num_send_segments);
             echo = &flatbuffers_data;
             context = (void *)(&fb_builder);
+            echo->serialize_message(sga, context);
+        } else if (!std::strcmp(cereal_system.c_str(), "cornflakes")) {
+            allocate_segments(&sga, num_send_segments);
+            echo = &corn_echo;
+            // setup external memory in dpdk datapath
+            corn_echo.init_ext_mem();
+            uint16_t ext_mem_len = (uint16_t)corn_echo.get_mmap_len();
+            void *mmap_addr = corn_echo.get_mmap_addr();
+            DMTR_OK(dmtr_set_external_memory(mmap_addr, &ext_mem_len));
+            corn_echo.set_mmap_available_len((size_t )ext_mem_len);
+            context = (void *)(&cornflakes_get);
             echo->serialize_message(sga, context);
         } else {
             std::cerr << "Serialization cereal_system " << cereal_system << " unknown." << std::endl;

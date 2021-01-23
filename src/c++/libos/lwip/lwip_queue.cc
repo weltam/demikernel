@@ -25,6 +25,7 @@
 #include <netinet/in.h>
 #include <rte_common.h>
 #include <rte_cycles.h>
+#include <rte_malloc.h>
 #include <rte_eal.h>
 #include <rte_ip.h>
 #include <rte_lcore.h>
@@ -86,6 +87,7 @@ typedef std::unique_ptr<dmtr_latency_t, std::function<void(dmtr_latency_t *)>> l
 static latency_ptr_type read_latency;
 static latency_ptr_type write_latency;
 #endif
+int dmtr::lwip_queue::num_sent = 0;
 sockaddr_in *dmtr::lwip_queue::my_bound_src = NULL;
 sockaddr_in *dmtr::lwip_queue::default_src = NULL;
 uint64_t dmtr::lwip_queue::in_packets = 0;
@@ -147,6 +149,7 @@ struct rte_mempool *dmtr::lwip_queue::our_mbuf_pool = NULL;
 struct rte_mempool *dmtr::lwip_queue::header_mbuf_pool = NULL;
 struct rte_mempool *dmtr::lwip_queue::payload_mbuf_pool1 = NULL;
 struct rte_mempool *dmtr::lwip_queue::payload_mbuf_pool2 = NULL;
+struct rte_mempool *dmtr::lwip_queue::extbuf_mbuf_pool = NULL;
 bool dmtr::lwip_queue::our_dpdk_init_flag = false;
 // local ports bound for incoming connections, used to demultiplex incoming new messages for accept
 std::map<lwip_addr, std::queue<dmtr_sgarray_t> *> dmtr::lwip_queue::our_recv_queues;
@@ -289,6 +292,7 @@ int dmtr::lwip_queue::init_dpdk_port(uint16_t port_id, struct rte_mempool &mbuf_
     tx_conf.tx_thresh.pthresh = TX_PTHRESH;
     tx_conf.tx_thresh.hthresh = TX_HTHRESH;
     tx_conf.tx_thresh.wthresh = TX_WTHRESH;
+    tx_conf.tx_free_thresh = 32;
 
     // configure the ethernet device.
     DMTR_OK(rte_eth_dev_configure(port_id, rx_rings, tx_rings, port_conf));
@@ -462,25 +466,24 @@ int dmtr::lwip_queue::finish_dpdk_init(YAML::Node &config)
         default_src->sin_addr.s_addr = in_addr.s_addr;
     }
     
-    if (use_external_memory) {
-        DMTR_OK(init_ext_mem());
-    }
     return 0;
 }
 
-int dmtr::lwip_queue::init_ext_mem() {
+int dmtr::lwip_queue::init_ext_mem(void *mmap_addr, uint16_t *mmap_len) {
+    assert(*mmap_len % PAGE_SIZE == 0);
+    assert(mmap_addr != NULL);
+    
     // first, mmap some memory: let's say like 100 pages
-    std::cout << "Page size is " << PAGE_SIZE << std::endl;
     size_t page_size = PAGE_SIZE;
     size_t num_pages = NUM_EXTERNAL_PAGES;
     void * addr = mmap(NULL, page_size * num_pages, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, -1, 0);
     if ( addr == MAP_FAILED ) {
         printf("Failed to mmap memory\n");
         return 1;
-    } 
+    }
 
     // second, register the external memory
-    int ret = rte_extmem_register(addr, page_size*num_pages, NULL, 0, page_size);
+    int ret = rte_extmem_register(mmap_addr, *mmap_len, NULL, 0, PAGE_SIZE);
     if (ret != 0) {
         std::cout << "Register Errno: " << rte_strerror(rte_errno) << std::endl;
         return ret;
@@ -490,26 +493,27 @@ int dmtr::lwip_queue::init_ext_mem() {
     uint16_t pid = 0;
     RTE_ETH_FOREACH_DEV(pid) {
         struct rte_eth_dev *dev = &rte_eth_devices[pid];
-        ret = rte_dev_dma_map(dev->device, addr, 0, page_size*num_pages);
+        ret = rte_dev_dma_map(dev->device, mmap_addr, 0, *mmap_len);
         if (ret != 0) {
             std::cout << "dma map errno: " << rte_strerror(rte_errno) << std::endl;
             return ret;
         }
     }
-    ext_mem_cfg->addr = addr;
-    ext_mem_cfg->num_pages = num_pages;
-    ext_mem_cfg->buf_size = (uint16_t)(num_pages * page_size);
-    memset(reinterpret_cast<char *>(addr), 'D', page_size * num_pages);
-    struct ::rte_mbuf_ext_shared_info* shinfo = ::rte_pktmbuf_ext_shinfo_init_helper(ext_mem_cfg->addr, &ext_mem_cfg->buf_size, free_external_buffer_callback, NULL);
+    ext_mem_cfg->addr = mmap_addr;
+    ext_mem_cfg->num_pages = (*mmap_len / PAGE_SIZE);
+    struct ::rte_mbuf_ext_shared_info* shinfo = ::rte_pktmbuf_ext_shinfo_init_helper(mmap_addr, mmap_len, free_external_buffer_callback, NULL);
     ext_mem_cfg->shinfo = shinfo;
-    printf("Finished registering the external memory\n");
+    ext_mem_cfg->buf_size = *mmap_len;
+    ext_mem_cfg->ext_mem_iova = 0;
     return 0;
 
 }
 
 void dmtr::lwip_queue::free_external_buffer_callback(void *addr, void *opaque) {
-    printf("Addr of mmap'd memory: %p\n", ext_mem_cfg->addr);
-    printf("In this function: addr is %p\n", addr);
+    if (!use_external_memory) {
+        printf("Addr of mmap'd memory: %p\n", ext_mem_cfg->addr);
+        printf("In this function: addr is %p\n", addr);
+    }
     // do nothing, for now
 }
 
@@ -782,6 +786,9 @@ int dmtr::lwip_queue::push_thread(task::thread_type::yield_type &yield, task::th
             //std::cout << "Sending to default address: " << saddr->sin_addr.s_addr << std::endl;
         }
         struct rte_mbuf *pkt = NULL;
+        if (use_external_memory) {
+            lwip_sga->num_segments = 2;
+        }
         struct rte_mbuf *pkts[lwip_sga->num_segments];
         if (zero_copy_mode) {
             DMTR_OK(rte_pktmbuf_alloc(pkts[0], header_mbuf_pool));
@@ -800,11 +807,16 @@ int dmtr::lwip_queue::push_thread(task::thread_type::yield_type &yield, task::th
             }
             pkt = pkts[0];
         } else {
-            DMTR_OK(rte_pktmbuf_alloc(pkt, our_mbuf_pool));
-            // try to attach an external mbuf
             if (use_external_memory) {
-                printf("Using ext mem\n");
-                ::rte_pktmbuf_attach_extbuf(pkt, ext_mem_cfg->addr, NULL, ext_mem_cfg->buf_size, ext_mem_cfg->shinfo);
+                num_sent++;
+                DMTR_OK(rte_pktmbuf_alloc(pkts[0], our_mbuf_pool));
+                DMTR_OK(rte_pktmbuf_alloc(pkts[1], extbuf_mbuf_pool));
+                // TODO: should packet be attached to entire buffer
+                ::rte_pktmbuf_attach_extbuf(pkts[1], ext_mem_cfg->addr, ext_mem_cfg->ext_mem_iova, ext_mem_cfg->buf_size, ext_mem_cfg->shinfo);
+                pkts[0]->next = pkts[1];
+                pkt = pkts[0];
+            } else {
+                DMTR_OK(rte_pktmbuf_alloc(pkt, our_mbuf_pool));
             }
         }
         auto *p = rte_pktmbuf_mtod(pkt, uint8_t *);
@@ -850,26 +862,32 @@ int dmtr::lwip_queue::push_thread(task::thread_type::yield_type &yield, task::th
             for (uint32_t i = 0; i < lwip_sga->num_segments; i++) {
                 total_len += lwip_sga->segment_sizes[i];
             }
+        } else if (use_external_memory) {
+            for (size_t i = 0; i < sga->sga_numsegs; i++) {
+                total_len += sga->sga_segs[i].sgaseg_len;
+            }
         } else {
             // Fill in Demeter data at p.
-            {
+            /*{
                 auto * const u32 = reinterpret_cast<uint32_t *>(p);
                 *u32 = htonl(sga->sga_numsegs);
                 total_len += sizeof(*u32);
                 p += sizeof(*u32);
-            }
+            }*/
 
             for (size_t i = 0; i < sga->sga_numsegs; i++) {
-                auto * const u32 = reinterpret_cast<uint32_t *>(p);
+                // just flatten it into a single contiguous buffer, no extra
+                // overhead
+                /*auto * const u32 = reinterpret_cast<uint32_t *>(p);
                 const auto len = sga->sga_segs[i].sgaseg_len;
                 *u32 = htonl(len);
                 total_len += sizeof(*u32);
-                p += sizeof(*u32);
+                p += sizeof(*u32);*/
                 // todo: remove copy by associating foreign memory with
                 // pktmbuf object.
-                rte_memcpy(p, sga->sga_segs[i].sgaseg_buf, len);
-                total_len += len;
-                p += len;
+                rte_memcpy(p, sga->sga_segs[i].sgaseg_buf, sga->sga_segs[i].sgaseg_len);
+                total_len += sga->sga_segs[i].sgaseg_len;
+                p += sga->sga_segs[i].sgaseg_len;
             }
         }
 #endif
@@ -969,6 +987,12 @@ int dmtr::lwip_queue::push_thread(task::thread_type::yield_type &yield, task::th
                 }
             }
             pkt = pkts[0];
+        } else if (use_external_memory) {
+            pkt->pkt_len = total_len;
+            pkt->data_len = header_size;
+            pkts[1]->data_len = total_len - header_size;
+            pkt->nb_segs = 2;
+            pkt->next = pkts[1];
         } else {
             pkt->data_len = total_len;
             pkt->pkt_len = total_len;
@@ -987,10 +1011,10 @@ int dmtr::lwip_queue::push_thread(task::thread_type::yield_type &yield, task::th
         printf("send: udp src port: %d\n", ntohs(udp_hdr->src_port));
         printf("send: udp dst port: %d\n", ntohs(udp_hdr->dst_port));
         printf("send: sga_numsegs: %d\n", sga->sga_numsegs);
-        // for (size_t i = 0; i < sga->sga_numsegs; ++i) {
-        //     printf("send: buf [%lu] len: %u\n", i, sga->sga_segs[i].sgaseg_len);
+        for (size_t i = 0; i < sga->sga_numsegs; ++i) {
+            printf("send: buf [%lu] len: %u\n", i, sga->sga_segs[i].sgaseg_len);
         //     printf("send: packet segment [%lu] contents: %s\n", i, reinterpret_cast<char *>(sga->sga_segs[i].sgaseg_buf));
-        // }
+        }
         printf("send: udp len: %d\n", ntohs(udp_hdr->dgram_len));
         printf("send: pkt len: %d\n", total_len);
         rte_pktmbuf_dump(stderr, pkt, total_len);
@@ -1119,7 +1143,7 @@ dmtr::lwip_queue::service_incoming_packets() {
         }
 
 #else
-        if (zero_copy_mode) {
+        if (zero_copy_mode || use_external_memory) {
             sga.recv_segments = (void *)(pkts[i]);
         } else {
             rte_pktmbuf_free(pkts[i]);
@@ -1267,11 +1291,12 @@ dmtr::lwip_queue::parse_packet(struct sockaddr_in &src,
     // allocate this many headers
 #else
     // segment count
-    if (zero_copy_mode) {
+    if (zero_copy_mode || use_external_memory) {
         sga.sga_numsegs = 1;
     } else {
-        sga.sga_numsegs = ntohl(*reinterpret_cast<uint32_t *>(p));
-        p += sizeof(uint32_t);
+        //sga.sga_numsegs = ntohl(*reinterpret_cast<uint32_t *>(p));
+        //p += sizeof(uint32_t);
+        sga.sga_numsegs = 1;
     }
 #endif
 #if DMTR_DEBUG
@@ -1288,7 +1313,7 @@ dmtr::lwip_queue::parse_packet(struct sockaddr_in &src,
     sga.sga_segs[0].sgaseg_buf = p;
     sga.sga_segs[0].sgaseg_len = pkt->pkt_len - header;
 #else
-    if (zero_copy_mode) {
+    if (zero_copy_mode || use_external_memory) {
         sga.sga_segs[0].sgaseg_buf = p;
         //printf("Received %zu of data\n", pkt->pkt_len - header);
         sga.sga_segs[0].sgaseg_len = pkt->pkt_len - header;
@@ -1303,7 +1328,13 @@ dmtr::lwip_queue::parse_packet(struct sockaddr_in &src,
         //}
 
     } else {
-        for (size_t i = 0; i < sga.sga_numsegs; ++i) {
+        sga.sga_segs[0].sgaseg_len = pkt->pkt_len - header;
+        size_t seg_len = sga.sga_segs[0].sgaseg_len;
+        void *buf = NULL;
+        DMTR_OK(dmtr_malloc(&buf, seg_len));
+        rte_memcpy(buf, p, seg_len);
+        sga.sga_segs[0].sgaseg_buf = buf;
+        /*for (size_t i = 0; i < sga.sga_numsegs; ++i) {
             // segment length
             auto seg_len = ntohl(*reinterpret_cast<uint32_t *>(p));
             sga.sga_segs[i].sgaseg_len = seg_len;
@@ -1328,7 +1359,7 @@ dmtr::lwip_queue::parse_packet(struct sockaddr_in &src,
 #if DMTR_DEBUG
             printf("recv: packet segment [%lu] contents: %s\n", i, reinterpret_cast<char *>(buf));
 #endif
-        }
+        }*/
     }
 #endif
     sga.sga_addr.sin_family = AF_INET;
@@ -1672,8 +1703,40 @@ int dmtr::lwip_queue::set_zero_copy() {
     return 0;
 }
 
-int dmtr::lwip_queue::set_use_external_memory() {
+int dmtr::lwip_queue::set_use_external_memory(void *mmap_addr, uint16_t *mmap_len) {
+    DMTR_OK(init_ext_mem(mmap_addr, mmap_len));
     use_external_memory = true;
+    // init extbuf mempool
+    struct rte_pktmbuf_pool_private mbp_priv;
+    unsigned elt_size;
+    elt_size = sizeof(struct rte_mbuf) + sizeof(struct rte_pktmbuf_pool_private);
+    mbp_priv.mbuf_data_room_size = 0;
+    mbp_priv.mbuf_priv_size = 0;
+    const uint16_t nb_ports = rte_eth_dev_count_avail();
+
+    extbuf_mbuf_pool = ::rte_mempool_create_empty("extbuf_mempool",
+                                        NUM_MBUFS * nb_ports,
+                                        elt_size,
+                                        0,
+                                        sizeof(struct rte_pktmbuf_pool_private),
+                                        rte_socket_id(), 0);
+    if (extbuf_mbuf_pool == NULL) {
+        printf("Unable to initialize extbuf mempool\n");
+        return EINVAL;
+    }
+
+    rte_pktmbuf_pool_init(extbuf_mbuf_pool, &mbp_priv);
+    if (rte_mempool_populate_default(extbuf_mbuf_pool) != (NUM_MBUFS * nb_ports)) {
+        printf("Mempool populate didnt init correct number\n");
+        return 1;
+    }
+
+    if ((unsigned int)(rte_mempool_obj_iter(extbuf_mbuf_pool, rte_pktmbuf_init, NULL)) != 
+            (unsigned int)(NUM_MBUFS * nb_ports)) {
+                printf("Mempool obj iter didn't init correct number.\n");
+                return 1;
+        };
+
     return 0;
 }
 

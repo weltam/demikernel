@@ -25,6 +25,7 @@ class echo_message
         FLATBUFFERS,  
         MALLOCBASELINE,
         PROTOARENA,
+        CORNFLAKES,
     };
 
     public: enum msg_type {

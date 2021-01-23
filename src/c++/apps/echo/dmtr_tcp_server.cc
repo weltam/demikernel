@@ -8,6 +8,8 @@
 #include "protobuf.hh"
 #include "protobytes.hh"
 #include "extra_malloc.hh"
+#include "stress_cornflakes.hh"
+#include "cornflakes.hh"
 #include "extra_malloc_no_str.hh"
 #include "extra_malloc_no_malloc.hh"
 #include "extra_malloc_single_memcpy.hh"
@@ -107,6 +109,7 @@ int main(int argc, char *argv[])
     malloc_baseline_no_str malloc_baseline_no_str(packet_size, message);
     malloc_baseline_no_malloc malloc_baseline_no_malloc(packet_size, message);
     malloc_baseline_single_memcpy malloc_baseline_single_memcpy(packet_size, message);
+    cornflakes_echo corn_echo(packet_size, message);
 
     // set up server socket address
     struct sockaddr_in saddr = {};
@@ -187,9 +190,6 @@ int main(int argc, char *argv[])
         out_sga.sga_numsegs = num_send_segments; // so it doesn't error out
         DMTR_OK(dmtr_init_mempools(packet_size, num_send_segments));
     } else {
-        // for now: set using external memory
-        // DMTR_OK(dmtr_set_external_memory());
-        // initialize serialized data structure that will be sent back
         if (!run_protobuf_test) {
             fill_in_sga(out_sga, num_send_segments);
             // todo: maybe do something here
@@ -221,6 +221,15 @@ int main(int argc, char *argv[])
         } else if (!std::strcmp(cereal_system.c_str(), "flatbuffers")) {
             echo = &flatbuffers_data;
             library = echo_message::library::FLATBUFFERS;
+        } else if (!std::strcmp(cereal_system.c_str(), "cornflakes")) {
+            echo = &corn_echo;
+            corn_echo.init_ext_mem();
+            // setup external memory in dpdk datapath
+            uint16_t ext_mem_len = (uint16_t)corn_echo.get_mmap_len();
+            void *mmap_addr = corn_echo.get_mmap_addr();
+            DMTR_OK(dmtr_set_external_memory(mmap_addr, &ext_mem_len));
+            corn_echo.set_mmap_available_len((size_t)ext_mem_len);
+            library = echo_message::library::CORNFLAKES;
         } else {
             std::cerr << "Serialization cereal_system " << cereal_system  << " unknown." << std::endl;
              exit(1);
@@ -343,6 +352,8 @@ int main(int argc, char *argv[])
                     // define context if capnproto or flatbuffers
                     capnp::MallocMessageBuilder message_builder;
                     flatbuffers::FlatBufferBuilder fb_builder(packet_size);
+                    cornflakes::GetMessageCF cornflakes_get;
+                    
                     void *context = NULL;
                     switch (library) {
                         case echo_message::library::CAPNPROTO:
@@ -350,6 +361,10 @@ int main(int argc, char *argv[])
                             break;
                         case echo_message::library::FLATBUFFERS:
                             context = (void *)(&fb_builder);
+                            break;
+                        case echo_message::library::CORNFLAKES:
+                            context = (void *)(&cornflakes_get);
+                            break;
                         default:
                             break;
                     }
