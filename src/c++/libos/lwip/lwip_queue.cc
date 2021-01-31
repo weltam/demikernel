@@ -23,6 +23,7 @@
 #include <dmtr/libos/mem.h>
 #include <dmtr/libos/raii_guard.hh>
 #include <netinet/in.h>
+#include <rte_memzone.h>
 #include <rte_common.h>
 #include <rte_cycles.h>
 #include <rte_malloc.h>
@@ -150,6 +151,7 @@ struct rte_mempool *dmtr::lwip_queue::header_mbuf_pool = NULL;
 struct rte_mempool *dmtr::lwip_queue::payload_mbuf_pool1 = NULL;
 struct rte_mempool *dmtr::lwip_queue::payload_mbuf_pool2 = NULL;
 struct rte_mempool *dmtr::lwip_queue::extbuf_mbuf_pool = NULL;
+const struct rte_memzone *dmtr::lwip_queue::application_memzone = NULL;
 bool dmtr::lwip_queue::our_dpdk_init_flag = false;
 // local ports bound for incoming connections, used to demultiplex incoming new messages for accept
 std::map<lwip_addr, std::queue<dmtr_sgarray_t> *> dmtr::lwip_queue::our_recv_queues;
@@ -465,7 +467,7 @@ int dmtr::lwip_queue::finish_dpdk_init(YAML::Node &config)
         default_src = new struct sockaddr_in();
         default_src->sin_addr.s_addr = in_addr.s_addr;
     }
-    
+
     return 0;
 }
 
@@ -474,7 +476,7 @@ int dmtr::lwip_queue::init_ext_mem(void *mmap_addr, uint16_t *mmap_len) {
     assert(mmap_addr != NULL);
     
     // first, mmap some memory: let's say like 100 pages
-    size_t page_size = PAGE_SIZE;
+    /*size_t page_size = PAGE_SIZE;
     size_t num_pages = NUM_EXTERNAL_PAGES;
     void * addr = mmap(NULL, page_size * num_pages, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, -1, 0);
     if ( addr == MAP_FAILED ) {
@@ -498,13 +500,17 @@ int dmtr::lwip_queue::init_ext_mem(void *mmap_addr, uint16_t *mmap_len) {
             std::cout << "dma map errno: " << rte_strerror(rte_errno) << std::endl;
             return ret;
         }
-    }
+    }*/
     ext_mem_cfg->addr = mmap_addr;
     ext_mem_cfg->num_pages = (*mmap_len / PAGE_SIZE);
     struct ::rte_mbuf_ext_shared_info* shinfo = ::rte_pktmbuf_ext_shinfo_init_helper(mmap_addr, mmap_len, free_external_buffer_callback, NULL);
     ext_mem_cfg->shinfo = shinfo;
     ext_mem_cfg->buf_size = *mmap_len;
-    ext_mem_cfg->ext_mem_iova = 0;
+    ext_mem_cfg->ext_mem_iova = rte_malloc_virt2iova(mmap_addr);
+    if (ext_mem_cfg->ext_mem_iova == RTE_BAD_IOVA) {
+        printf("Failed to get iova\n");
+        return EINVAL;
+    }
     return 0;
 
 }
@@ -812,9 +818,10 @@ int dmtr::lwip_queue::push_thread(task::thread_type::yield_type &yield, task::th
                 DMTR_OK(rte_pktmbuf_alloc(pkts[0], our_mbuf_pool));
                 DMTR_OK(rte_pktmbuf_alloc(pkts[1], extbuf_mbuf_pool));
                 // TODO: should packet be attached to entire buffer
-                ::rte_pktmbuf_attach_extbuf(pkts[1], ext_mem_cfg->addr, ext_mem_cfg->ext_mem_iova, ext_mem_cfg->buf_size, ext_mem_cfg->shinfo);
+                char *payload = reinterpret_cast<char *>(sga->sga_segs[1].sgaseg_buf);
+                ::rte_pktmbuf_attach_extbuf(pkts[1], (void *)payload, ext_mem_cfg->ext_mem_iova, sga->sga_segs[1].sgaseg_len, ext_mem_cfg->shinfo);
                 pkts[0]->next = pkts[1];
-                pkt = pkts[0];
+                //pkt = pkts[0];
             } else {
                 DMTR_OK(rte_pktmbuf_alloc(pkt, our_mbuf_pool));
             }
@@ -845,7 +852,7 @@ int dmtr::lwip_queue::push_thread(task::thread_type::yield_type &yield, task::th
         *id = htonl(sga->id);
         p += sizeof(*id);
 
-        //auto *data_ptr = p;
+        // auto *data_ptr = p;
 
         // now add in the SGA id to be sent and deserialized on the other side.
         uint32_t total_len = sizeof(*id); // Length of data written so far.
@@ -863,6 +870,8 @@ int dmtr::lwip_queue::push_thread(task::thread_type::yield_type &yield, task::th
                 total_len += lwip_sga->segment_sizes[i];
             }
         } else if (use_external_memory) {
+            // copy in the first sga into the header
+            rte_memcpy(p, sga->sga_segs[0].sgaseg_buf, sga->sga_segs[0].sgaseg_len);
             for (size_t i = 0; i < sga->sga_numsegs; i++) {
                 total_len += sga->sga_segs[i].sgaseg_len;
             }
@@ -989,9 +998,15 @@ int dmtr::lwip_queue::push_thread(task::thread_type::yield_type &yield, task::th
             pkt = pkts[0];
         } else if (use_external_memory) {
             pkt->pkt_len = total_len;
-            pkt->data_len = header_size;
-            pkts[1]->data_len = total_len - header_size;
+            //pkt->data_len = total_len;
+            pkt->data_len = header_size + sga->sga_segs[0].sgaseg_len;
+            pkts[1]->data_len = total_len - pkt->data_len;
+            //char *payload = reinterpret_cast<char *>(get_data_pointer(pkts[0], false));
+            //size_t payload_length = pkts[0]->data_len;
+            //printf("SEND: sga id: %u, 1st segment, first byte of payload: %c, 2nd: %c, 2nd to last: %c, last: %c\n", (unsigned)sga->id, payload[46 + 8], payload[46 + 9], payload[payload_length - 2], payload[payload_length - 1]);
             pkt->nb_segs = 2;
+            //pkt->nb_segs = 1;
+            //pkt->next = NULL;
             pkt->next = pkts[1];
         } else {
             pkt->data_len = total_len;
@@ -1318,9 +1333,11 @@ dmtr::lwip_queue::parse_packet(struct sockaddr_in &src,
         //printf("Received %zu of data\n", pkt->pkt_len - header);
         sga.sga_segs[0].sgaseg_len = pkt->pkt_len - header;
         // check the bytes that they were actually sent.
-        //char *payload = reinterpret_cast<char *>(p);
-        //size_t payload_length = pkt->pkt_len - header;
-        //printf("RECVD: pkt:%u, data_len: %u\n", pkt->pkt_len, pkt->data_len);
+        //char *payload = reinterpret_cast<char *>(p) + 8;
+        //size_t payload_length = pkt->pkt_len - header - 8;
+        //printf("RECVD: pkt:%u, data_len: %u, id: %u\n", pkt->pkt_len, pkt->data_len, (unsigned)sga.id);
+        //printf("RECV: addr of ptr: %p\n", payload);
+        //printf("---->RECVD: idx: 1, first byte of payload: %c, 2nd: %c, 2nd to last: %c, last: %c\n", payload[0], payload[1], payload[payload_length - 2], payload[payload_length - 1]);
         //for (size_t i = 0; i < lwip_sga->num_segments; i++) {
             //payload_length = lwip_sga->segment_sizes[i];
             //printf("---->RECVD: idx: %zu, first byte of payload: %c, 2nd: %c, 2nd to last: %c, last: %c\n", i, payload[0], payload[1], payload[payload_length - 2], payload[payload_length - 1]);

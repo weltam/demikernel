@@ -15,6 +15,7 @@
 #include <unordered_map>
 #include <map>
 #include <yaml-cpp/yaml.h>
+#include <rte_memzone.h>
 
 #define MAX_NUM_SEGMENTS 100
 
@@ -84,6 +85,7 @@ class lwip_queue : public io_queue {
     private: static lwip_sga_t *lwip_sga;
     private: static ext_mem_cfg_t *ext_mem_cfg;
     private: static bool use_external_memory;
+    private: static const struct rte_memzone * application_memzone;
     public: lwip_queue(int qd);
     public: static int new_object(std::unique_ptr<io_queue> &q_out, int qd);
 

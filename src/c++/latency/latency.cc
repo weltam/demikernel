@@ -33,7 +33,7 @@
 #define LATENCY_NUM_BUCKETS 65
 
 // The maximum number of iterations we will record latencies for
-#define MAX_ITERATIONS 1500000
+#define MAX_ITERATIONS 5000000
 
 typedef boost::chrono::duration<uint64_t, boost::nano> duration_type;
 
@@ -176,6 +176,16 @@ Latency_Dump(FILE *f, dmtr_latency_t *l)
     int *ppnext = &firstType;
 
     l->latencies.shrink_to_fit();
+
+    // now, dump the latencies if lat log is specified, before printing
+    if (l->output_file != NULL) {
+        std::ofstream output;
+        output.open(l->output_file);
+        for (size_t i = 0; i < l->latencies.size(); i++) {
+            output << l->latencies.at(i) << std::endl;
+        }
+        output.close();
+    }
     sort(l->latencies.begin(), l->latencies.end());
     for (int type = 0; type < LATENCY_MAX_DIST; ++type) {
         Latency_Dist_t *d = l->dists[type];
@@ -260,14 +270,6 @@ Latency_Dump(FILE *f, dmtr_latency_t *l)
         }
     }
 
-    if (l->output_file != NULL) {
-        std::ofstream output;
-        output.open(l->output_file);
-        for (size_t i = 0; i < l->latencies.size(); i++) {
-            output << l->latencies.at(i) << std::endl;
-        }
-        output.close();
-    }
     return 0;
 }
 

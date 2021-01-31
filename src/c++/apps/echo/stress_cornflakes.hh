@@ -37,11 +37,6 @@ class GetMessageCF {
         char header[HEADER_SIZE];
         void *key_ptr; // TODO; do we even maintain separate pointers to the key
 
-        uint32_t get_key_len() {
-            uint32_t *key_len = (uint32_t *)(&header[KEY_HEADER_OFF]);
-            return  *key_len;
-        }
-        
         void set_key_len(size_t key_len) {
             uint32_t *key_len_ptr = (uint32_t *)(&header[KEY_HEADER_OFF]);
             *key_len_ptr = (uint32_t)key_len;
@@ -62,6 +57,11 @@ class GetMessageCF {
             key_ptr = NULL;
         }
 
+        uint32_t get_key_len() {
+            uint32_t *key_len = (uint32_t *)(&header[KEY_HEADER_OFF]);
+            return  *key_len;
+        }
+        
         bool has_key() {
             if (get_key_len() == 0) {
                 return false;
@@ -117,7 +117,7 @@ class GetMessageCF {
             if (key_len != 0) {
                 set_key_len((size_t)key_len);
                 size_t key_off = be32toh(*((uint32_t *)(&payload[KEY_HEADER_OFF + SIZE_FIELD])));
-                key_ptr = (void *)(&payload[key_off]);
+                key_ptr = (void *)(payload + key_off);
             }
         }
 };

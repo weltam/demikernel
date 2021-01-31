@@ -7,6 +7,7 @@
 #include "message.hh"
 #include <dmtr/sga.h>
 #include <sys/types.h>
+#include <rte_memzone.h>
 
 using namespace std;
 
@@ -16,6 +17,7 @@ class cornflakes_echo : public echo_message
     private: size_t mmap_len;
     private: size_t mmap_available_len;
     private: void *recv_payload;
+    private: const struct rte_memzone *memzone;
 
     public: cornflakes_echo(uint32_t field_size, string message_type);
     public: ~cornflakes_echo();
