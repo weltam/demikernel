@@ -7,9 +7,9 @@
 #include <sys/mman.h>
 #include <dmtr/sga.h>
 #include <dmtr/libos/mem.h>
-#include <rte_memzone.h>
-#include <rte_lcore.h>
-//#include <rte_malloc.h>
+//#include <rte_memzone.h>
+//#include <rte_lcore.h>
+#include <rte_malloc.h>
 
 cornflakes_echo::cornflakes_echo(uint32_t field_size, string message_type) :
     echo_message(echo_message::library::CORNFLAKES, field_size, message_type),
@@ -23,32 +23,32 @@ cornflakes_echo::cornflakes_echo(uint32_t field_size, string message_type) :
 }
 
 void cornflakes_echo::init_ext_mem() {
-    /*void *addr = rte_malloc("Serialization_Memory", 40960, 0);
+    void *addr = rte_malloc("Serialization_Memory", 409600, 0);
     if (addr == NULL) {
         printf("Rte malloc failed\n");
         exit(1);
-    }*/
+    }
     /*void *addr = mmap(NULL, 4096 * 1000, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, -1, 0);
     if (addr == MAP_FAILED) {
         printf("Failed to mmap memory for cornflakes_echo.\n");
         exit(1);
     }*/
 
-    memzone = rte_memzone_reserve("app_memzone", 4096 * 1000, rte_socket_id(), 0);
+    /*memzone = rte_memzone_reserve("app_memzone", 4096 * 1000, rte_socket_id(), 0);
     if (memzone == NULL) {
         printf("Failed to reserve memzone memory for cornflakes_echo.\n");
         exit(1);
-    }
+    }*/
 
-    mmap_addr = memzone->addr;
-    mmap_len = memzone->len;
+    mmap_addr = addr;
+    mmap_len = 409600;
     mmap_available_len = 4096 * 1000;
     memset(mmap_addr, 'm', mmap_len);
 
 }
 
 cornflakes_echo::~cornflakes_echo() {
-    munmap(mmap_addr, mmap_len);
+    //munmap(mmap_addr, mmap_len);
 }
 
 void * cornflakes_echo::get_mmap_addr() {

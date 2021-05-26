@@ -36,7 +36,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <boost/chrono/chrono_io.hpp>
-#define DMTR_PROFILE
+//#define DMTR_PROFILE
 #define LWIP
 
 #ifdef LWIP

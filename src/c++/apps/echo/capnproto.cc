@@ -7,18 +7,52 @@
 #include <dmtr/sga.h>
 #include <sys/types.h>
 #include <dmtr/libos/mem.h>
+#include <dmtr/latency.h>
+#include <boost/chrono.hpp>
 #include "assert.h"
 #include <iostream>
 
+//#define DMTR_PROFILE
+
 capnproto_echo::capnproto_echo(uint32_t field_size, string message_type) :
     echo_message(echo_message::library::CAPNPROTO, field_size, message_type),
-    string_field(generate_string(field_size)) {}
+#ifdef DMTR_PROFILE
+    cast_latency(NULL),
+    copy_latency(NULL),
+    encode_latency(NULL),
+    decode_latency(NULL),
+#endif
+    string_field(generate_string(field_size)) 
+{
+#ifdef DMTR_PROFILE
+    dmtr_new_latency(&cast_latency, "Capnproto cast latency");
+    dmtr_new_latency(&copy_latency, "Capnproto copy latency");
+    dmtr_new_latency(&encode_latency, "Capnproto encode latency");
+    dmtr_new_latency(&decode_latency, "Capnproto decode latency");
+#endif
+}
 
 void capnproto_echo::serialize_message(dmtr_sgarray_t &sga, void *context) {
     if (my_msg_enum == echo_message::msg_type::GET) {
+#ifdef DMTR_PROFILE
+        auto start_cast = boost::chrono::steady_clock::now();
+#endif
         GetMessageCP::Builder getMsg = (*(reinterpret_cast<capnp::MallocMessageBuilder*>(context))).initRoot<GetMessageCP>();
+#ifdef DMTR_PROFILE
+        auto start_copy = boost::chrono::steady_clock::now();
+#endif
         build_get(getMsg);
+#ifdef DMTR_PROFILE
+        auto end_copy = boost::chrono::steady_clock::now();
+#endif
         encode_msg(sga, (*(reinterpret_cast<capnp::MallocMessageBuilder*>(context))).getSegmentsForOutput());
+#ifdef DMTR_PROFILE
+        auto end_encode = boost::chrono::steady_clock::now();
+        dmtr_record_latency(cast_latency, (start_copy - start_cast).count());
+        dmtr_record_latency(copy_latency, (end_copy - start_copy).count());
+        dmtr_record_latency(encode_latency, (end_encode - end_copy).count());
+#endif
+
     } else if (my_msg_enum == echo_message::msg_type::PUT) {
         PutMessageCP::Builder putMsg = (*(reinterpret_cast<capnp::MallocMessageBuilder*>(context))).initRoot<PutMessageCP>();
         build_put(putMsg);
@@ -50,40 +84,42 @@ void capnproto_echo::serialize_message(dmtr_sgarray_t &sga, void *context) {
 }
 
 void capnproto_echo::deserialize_message(dmtr_sgarray_t &sga) {
-    GetMessageCP::Reader local_get;
-    PutMessageCP::Reader local_put;
-    Msg1LCP::Reader local_msg1L; 
-    Msg2LCP::Reader local_msg2L;
-    Msg3LCP::Reader local_msg3L;
-    Msg4LCP::Reader local_msg4L;
-    Msg5LCP::Reader local_msg5L;
+#ifdef DMTR_PROFILE
+    auto start_decode = boost::chrono::steady_clock::now();
+#endif
     auto segment_array = kj::heapArray<kj::ArrayPtr<const capnp::word>>(sga.sga_numsegs);
     decode_msg(sga, segment_array.begin());
-
     capnp::SegmentArrayMessageReader message(segment_array);
-    switch (my_msg_enum) {
-        case echo_message::msg_type::GET:
-            local_get = message.getRoot<GetMessageCP>();
-            break;
-        case echo_message::msg_type::PUT:
-            local_put = message.getRoot<PutMessageCP>();
-            break;
-        case echo_message::msg_type::MSG1L:
-            local_msg1L = message.getRoot<Msg1LCP>();
-            break;
-        case echo_message::msg_type::MSG2L:
-            local_msg2L = message.getRoot<Msg2LCP>();
-            break;
-        case echo_message::msg_type::MSG3L:
-            local_msg3L = message.getRoot<Msg3LCP>();
-            break;
-        case echo_message::msg_type::MSG4L:
-            local_msg4L = message.getRoot<Msg4LCP>();
-            break;
-        case echo_message::msg_type::MSG5L:
-            local_msg5L = message.getRoot<Msg5LCP>();
-            break;
+    if (my_msg_enum == echo_message::msg_type::GET) {
+    } else if (my_msg_enum == echo_message::msg_type::PUT) {
+        GetMessageCP::Reader local_get;
+        local_get = message.getRoot<GetMessageCP>();
+    } else if (my_msg_enum == echo_message::msg_type::MSG1L) {
+        PutMessageCP::Reader local_put;
+        local_put = message.getRoot<PutMessageCP>();
+
+    } else if (my_msg_enum == echo_message::msg_type::MSG2L) {
+        Msg1LCP::Reader local_msg1L; 
+        local_msg1L = message.getRoot<Msg1LCP>();
+
+    } else if (my_msg_enum == echo_message::msg_type::MSG3L) {
+        Msg2LCP::Reader local_msg2L;
+        local_msg2L = message.getRoot<Msg2LCP>();
+
+    } else if (my_msg_enum == echo_message::msg_type::MSG4L) {
+        Msg3LCP::Reader local_msg3L;
+        local_msg3L = message.getRoot<Msg3LCP>();
+    } else if (my_msg_enum == echo_message::msg_type::MSG5L) {
+        Msg4LCP::Reader local_msg4L;
+        local_msg4L = message.getRoot<Msg4LCP>();
+    } else {
+        Msg5LCP::Reader local_msg5L;
+        local_msg5L = message.getRoot<Msg5LCP>();
     }
+#ifdef DMTR_PROFILE
+    auto end_decode = boost::chrono::steady_clock::now();
+    dmtr_record_latency(decode_latency, (end_decode - start_decode).count());
+#endif
 }
 
 void capnproto_echo::encode_msg(dmtr_sgarray_t &sga, kj::ArrayPtr<const kj::ArrayPtr<const capnp::word>> segments) {
@@ -190,3 +226,12 @@ inline void capnproto_echo::build_msg5L(Msg5LCP::Builder msg5L) {
     recursive_msg4L(right, my_field_size/2);
 }
 
+
+void capnproto_echo::print_counters() {
+#ifdef DMTR_PROFILE
+    dmtr_dump_latency(stderr, cast_latency);
+    dmtr_dump_latency(stderr, copy_latency);
+    dmtr_dump_latency(stderr, encode_latency);
+    dmtr_dump_latency(stderr, decode_latency);
+#endif
+}

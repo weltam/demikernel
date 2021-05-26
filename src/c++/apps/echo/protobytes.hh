@@ -11,36 +11,28 @@
 #include <dmtr/sga.h>
 #include <sys/types.h>
 #include <dmtr/latency.h>
-
+//#define DMTR_PROFILE
 using namespace std;
 
 typedef google::protobuf::Message Message;
 
 class protobuf_bytes_echo : public echo_message
 {
-    private: string string_field;
+#ifdef DMTR_PROFILE
+    private: dmtr_latency_t *alloc_latency;
+    private: dmtr_latency_t *copy_latency;
+    private: dmtr_latency_t* encode_latency;
+    private: dmtr_latency_t* decode_latency;
+#endif
     
-    private: stress_bytes::GetMessage getMsg_deser;
-    private: stress_bytes::PutMessage putMsg_deser;
-    private: stress_bytes::Msg1L msg1L_deser;
-    private: stress_bytes::Msg2L msg2L_deser;
-    private: stress_bytes::Msg3L msg3L_deser;
-    private: stress_bytes::Msg4L msg4L_deser;
-    private: stress_bytes::Msg5L msg5L_deser;
-
-    private: dmtr_latency_t* serialize_latency;
-    private: dmtr_latency_t* parse_latency;
-    private: dmtr_latency_t* encode_malloc_latency;
-    private: dmtr_latency_t* encode_memcpy_latency;
-    private: dmtr_latency_t* decode_string_latency;
-
+    private: string string_field;
     public: protobuf_bytes_echo(uint32_t field_size, string message_type);
 
     public: virtual void serialize_message(dmtr_sgarray_t &sga, void *context);
     public: virtual void deserialize_message(dmtr_sgarray_t &sga);
 
-    public: void encode_msg(dmtr_sgarray_t &sga, const Message& msg);
-    public: void handle_message(const string& msg);
+    public: void encode_msg(dmtr_sgarray_t &sga, const Message& msg, void *context);
+    public: void handle_message(void *buf, size_t len);
     public: void print_counters();
 };
 
@@ -64,8 +56,11 @@ void fill_in_one_level_bytes(stress_bytes::Msg1L* msg, const string& string_fiel
 
 stress_bytes::Msg1L one_level_bytes(const string& string_field);
 
+#ifdef DMTR_PROFILE
+stress_bytes::GetMessage get_message_bytes(const string& string_field, dmtr_latency_t *alloc_latency, dmtr_latency_t *copy_latency);
+#else
 stress_bytes::GetMessage get_message_bytes(const string& string_field);
-
+#endif
 stress_bytes::PutMessage* put_message_bytes(const string& string_field);
 
 #endif 

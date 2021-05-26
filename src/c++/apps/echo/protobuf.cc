@@ -7,7 +7,10 @@
 #include <dmtr/libos/mem.h>
 #include <string>
 #include <assert.h>
+#include <dmtr/latency.h>
+#include <boost/chrono.hpp>
 #define FILL_CHAR 'a'
+//#define DMTR_PROFILE
 
 /*
  * Header Format (protobuf):
@@ -91,9 +94,24 @@ inline Msg1L one_level(const string& string_field) {
     return msg;
 }
 
+#ifdef DMTR_PROFILE
+inline GetMessage get_message(const string& string_field, dmtr_latency_t *alloc_latency, dmtr_latency_t *copy_latency) {
+#else
 inline GetMessage get_message(const string& string_field) {
+#endif
+#ifdef DMTR_PROFILE
+    auto start_alloc = boost::chrono::steady_clock::now();
+#endif
     GetMessage get;
+#ifdef DMTR_PROFILE
+    auto end_alloc = boost::chrono::steady_clock::now();
+#endif
     get.set_key(string_field);
+#ifdef DMTR_PROFILE
+    auto end_set = boost::chrono::steady_clock::now();
+    dmtr_record_latency(alloc_latency, (end_alloc - start_alloc).count());
+    dmtr_record_latency(copy_latency, (end_set - end_alloc).count());
+#endif
     return get;
 }
 
@@ -107,79 +125,110 @@ PutMessage* put_message(const string& string_field) {
 
 protobuf_echo::protobuf_echo(uint32_t field_size, string message_type) :
     echo_message(echo_message::library::PROTOBUF, field_size, message_type),
-    string_field(generate_string(field_size)) {}
+#ifdef DMTR_PROFILE
+    alloc_latency(NULL),
+    copy_latency(NULL),
+    encode_latency(NULL),
+    decode_latency(NULL),
+#endif
+    string_field(generate_string(field_size)) {
+#ifdef DMTR_PROFILE
+        dmtr_new_latency(&alloc_latency, "Protobuf serialize alloc");
+        dmtr_new_latency(&copy_latency, "Protobuf serialize copy");
+        dmtr_new_latency(&encode_latency, "Protobuf serialize encode");
+        dmtr_new_latency(&decode_latency, "Protobuf serialize decode");
+#endif
+    }
 
-void protobuf_echo::handle_message(const string& msg) {
-    switch (my_msg_enum) {
-        case echo_message::msg_type::GET:
-            getMsg_deser.ParseFromString(msg);
-            break;
-        case echo_message::msg_type::PUT:
-            putMsg_deser.ParseFromString(msg);
-            break;
-        case echo_message::msg_type::MSG1L:
-            msg1L_deser.ParseFromString(msg);
-            break;
-        case echo_message::msg_type::MSG2L:
-            msg2L_deser.ParseFromString(msg);
-            break;
-        case echo_message::msg_type::MSG3L:
-            msg3L_deser.ParseFromString(msg);
-            break;
-        case echo_message::msg_type::MSG4L:
-            msg4L_deser.ParseFromString(msg);
-            break;
-        case echo_message::msg_type::MSG5L:
-            msg5L_deser.ParseFromString(msg);
-            break;
+void protobuf_echo::handle_message(void *buf, size_t len) {
+    if (my_msg_enum == echo_message::msg_type::GET) {
+        GetMessage getMsg_deser;
+        getMsg_deser.ParseFromArray(buf, len);
+    } else if (my_msg_enum == echo_message::msg_type::PUT) {
+        PutMessage putMsg_deser;
+        putMsg_deser.ParseFromArray(buf, len);
+    } else if (my_msg_enum == echo_message::msg_type::MSG1L) {
+        Msg1L msg1L_deser;
+        msg1L_deser.ParseFromArray(buf, len);
+    } else if (my_msg_enum == echo_message::msg_type::MSG2L) {
+        Msg2L msg2L_deser;
+        msg2L_deser.ParseFromArray(buf, len);
+    } else if (my_msg_enum == echo_message::msg_type::MSG3L) {
+        Msg3L msg3L_deser;
+        msg3L_deser.ParseFromArray(buf, len);
+    } else if (my_msg_enum == echo_message::msg_type::MSG4L) {
+        Msg4L msg4L_deser;
+        msg4L_deser.ParseFromArray(buf, len);
+    } else if (my_msg_enum == echo_message::msg_type::MSG5L) {
+        Msg5L msg5L_deser;
+        msg5L_deser.ParseFromArray(buf, len);
     }
 }
 
 void protobuf_echo::deserialize_message(dmtr_sgarray_t &sga) {
+#ifdef DMTR_PROFILE
+    auto start_decode = boost::chrono::steady_clock::now();
+#endif
     assert(sga.sga_numsegs == 1);
-    string data((char *)sga.sga_segs[0].sgaseg_buf, sga.sga_segs[0].sgaseg_len);
-    handle_message(data);
+    handle_message(sga.sga_segs[0].sgaseg_buf, sga.sga_segs[0].sgaseg_len);
+#ifdef DMTR_PROFILE
+    auto end_decode = boost::chrono::steady_clock::now();
+    dmtr_record_latency(decode_latency, (end_decode - start_decode).count());
+#endif
 }
 
 void protobuf_echo::encode_msg(dmtr_sgarray_t &sga,
-                                const Message& msg) {
+                                const Message& msg, void *context) {
     sga.sga_numsegs = 1;
-    void *p = NULL;
-    
-    string data = msg.SerializeAsString();
-    size_t dataLen = data.length();
+    void *buf = NULL;
+    dmtr_malloc(&buf, msg.ByteSizeLong());
+    msg.SerializeToArray(buf, msg.ByteSizeLong());
 
-    sga.sga_segs[0].sgaseg_len = dataLen;
-    dmtr_malloc(&p, dataLen);
-    // printf("Allocating protobuf data at: %p, length: %u\n", p, (unsigned)dataLen);
-    assert(p != NULL);
-    sga.sga_segs[0].sgaseg_buf = p;
-    memcpy(p, (void *)data.c_str(), dataLen);
+    sga.sga_segs[0].sgaseg_len = msg.ByteSizeLong();
+    sga.sga_segs[0].sgaseg_buf = buf;
 }
 
 void protobuf_echo::serialize_message(dmtr_sgarray_t &sga, void *context) {
     sga.sga_numsegs = 1;
     if (my_msg_enum == echo_message::msg_type::GET) {
+#ifdef DMTR_PROFILE
+        GetMessage getMsg = get_message(string_field, alloc_latency, copy_latency);
+        auto start_encode = boost::chrono::steady_clock::now();
+#else
         GetMessage getMsg = get_message(string_field);
-        encode_msg(sga, getMsg);
+#endif
+        encode_msg(sga, getMsg, context);
+#ifdef DMTR_PROFILE
+        auto end_encode = boost::chrono::steady_clock::now();
+        dmtr_record_latency(encode_latency, (end_encode - start_encode).count());
+#endif
     } else if (my_msg_enum == echo_message::msg_type::PUT) {
         PutMessage *putMsg = put_message(string_field);
-        encode_msg(sga, *putMsg);
+        encode_msg(sga, *putMsg, context);
     } else if (my_msg_enum == echo_message::msg_type::MSG1L) {
         Msg1L msg1L = one_level(string_field);
-        encode_msg(sga, msg1L);
+        encode_msg(sga, msg1L, context);
     } else if (my_msg_enum == echo_message::msg_type::MSG2L) {
         Msg2L msg2L = two_level(string_field);
-        encode_msg(sga, msg2L);
+        encode_msg(sga, msg2L, context);
     } else if (my_msg_enum == echo_message::msg_type::MSG3L) {
         Msg3L msg3L = three_level(string_field);
-        encode_msg(sga, msg3L);
+        encode_msg(sga, msg3L, context);
     } else if (my_msg_enum == echo_message::msg_type::MSG4L) {
         Msg4L msg4L = four_level(string_field);
-        encode_msg(sga, msg4L);
+        encode_msg(sga, msg4L, context);
     } else if (my_msg_enum == echo_message::msg_type::MSG5L) {
         Msg5L msg5L = five_level(string_field);
-        encode_msg(sga, msg5L);
+        encode_msg(sga, msg5L, context);
     } 
+}
+
+void protobuf_echo::print_counters() {
+#ifdef DMTR_PROFILE
+    dmtr_dump_latency(stderr, alloc_latency);
+    dmtr_dump_latency(stderr, copy_latency);
+    dmtr_dump_latency(stderr, encode_latency);
+    dmtr_dump_latency(stderr, decode_latency);
+#endif
 }
 

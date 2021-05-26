@@ -41,7 +41,8 @@
 #include <rte_mbuf.h>
 #endif
 
-// #define DMTR_PROFILE
+//#define CAPNPROTO_PROFILE
+//#define NEW_DMTR_PROFILE
 #define NUM_CONNECTIONS 20
 // #define OPEN2
 // general file descriptors
@@ -54,7 +55,7 @@ bool free_push = false; // need to free push buffers
 bool is_malloc_baseline = false; // malloc baseline also has different freeing behavior
 dmtr_sgarray_t out_sga = {};
 
-#ifdef DMTR_PROFILE
+#ifdef NEW_DMTR_PROFILE
 dmtr_latency_t *pop_latency = NULL;
 dmtr_latency_t *push_latency = NULL;
 dmtr_latency_t *push_wait_latency = NULL;
@@ -67,9 +68,14 @@ dmtr_latency_t *serialize_counter = NULL;
 dmtr_latency_t *cereal_counter = NULL;
 #endif
 
+#ifdef CAPNPROTO_PROFILE
+dmtr_latency_t *capnproto_alloc = NULL;
+#endif
+
 void sig_handler(int signo)
 {
-#ifdef DMTR_PROFILE
+#ifdef NEW_DMTR_PROFILE
+    printf("what's up\n");
     dmtr_dump_latency(stderr, pop_latency);
     dmtr_dump_latency(stderr, push_latency);
     dmtr_dump_latency(stderr, push_wait_latency);
@@ -82,7 +88,10 @@ void sig_handler(int signo)
         dmtr_dump_latency(stderr, serialize_counter);
         dmtr_dump_latency(stderr, cereal_counter);
         echo->print_counters();
-    } 
+#ifdef CAPNPROTO_PROFILE
+        dmtr_dump_latency(stderr, capnproto_alloc);
+#endif
+    }
 #endif
 
     dmtr_close(lqd);
@@ -128,7 +137,7 @@ int main(int argc, char *argv[])
     saddr.sin_port = htons(port);
 
     DMTR_OK(dmtr_init(argc, argv));
-#ifdef DMTR_PROFILE
+#ifdef NEW_DMTR_PROFILE
     DMTR_OK(dmtr_new_latency(&pop_latency, "pop server"));
     DMTR_OK(dmtr_new_latency(&push_latency, "push server"));
     DMTR_OK(dmtr_new_latency(&push_wait_latency, "push wait server"));
@@ -141,8 +150,12 @@ int main(int argc, char *argv[])
         DMTR_OK(dmtr_new_latency(&deserialize_counter, "deserialize rdtsc"));
         DMTR_OK(dmtr_new_latency(&serialize_counter, "serialize rdtsc"));
         DMTR_OK(dmtr_new_latency(&cereal_counter, "total cereal rdtsc"));
+#ifdef CAPNPROTO_PROFILE
+    DMTR_OK(dmtr_new_latency(&capnproto_alloc, "capnproto_alloc timer"));
+#endif
     }
 #endif
+
 
 
     std::vector<dmtr_qtoken_t> tokens;
@@ -152,8 +165,7 @@ int main(int argc, char *argv[])
     memset(push_tokens, 0, NUM_CONNECTIONS * sizeof(dmtr_qtoken_t));
     dmtr_qtoken_t qtemp;
     int num_recved[NUM_CONNECTIONS];
-
-
+    
     // allocate enough space for the headers
     for (int i = 0; i < NUM_CONNECTIONS; i++) {
         // no need to allocate on receive side, those will be automatically
@@ -212,9 +224,11 @@ int main(int argc, char *argv[])
         } else if (!std::strcmp(cereal_system.c_str(), "protobuf")) {
             free_push = true;
             echo = &proto_data;
+            library = echo_message::PROTOBUF;
         } else if (!std::strcmp(cereal_system.c_str(), "protobytes")) {
             free_push = true;
             echo = &proto_bytes_data;
+            library = echo_message::PROTOBUF;
         } else if (!std::strcmp(cereal_system.c_str(), "capnproto")) {
             echo = &capnproto_data;
             library = echo_message::library::CAPNPROTO;
@@ -259,7 +273,7 @@ int main(int argc, char *argv[])
                 DMTR_TRUE(EINVAL, idx == 0);
                 std::cerr << "connection accepted (qid = " << wait_out.qr_value.ares.qd << ")." << std::endl;
                 // check accept on servers
-#ifdef DMTR_PROFILE
+#ifdef NEW_DMTR_PROFILE
                 auto t0 = boost::chrono::steady_clock::now();
                 start_times[qtemp] = t0;
 #endif
@@ -273,14 +287,14 @@ int main(int argc, char *argv[])
                 //DMTR_TRUE(EINVAL, wait_out.qr_value.sga.sga_numsegs == 1);
                 recved++;
                 num_recved[idx] += 1;
-#ifdef DMTR_PROFILE
+#ifdef NEW_DMTR_PROFILE
                 auto start_counter = rdtsc();
                 auto start = boost::chrono::steady_clock::now();
 #endif
                 if (run_protobuf_test) {
                     // deserialize the message from the buffer
                     echo->deserialize_message(wait_out.qr_value.sga);
-#ifdef DMTR_PROFILE
+#ifdef NEW_DMTR_PROFILE
                     auto deserialize_time = boost::chrono::steady_clock::now() - start;
                     auto deserialize_count = rdtsc() - start_counter;
                     DMTR_OK(dmtr_record_latency(deserialize_latency, deserialize_time.count()));
@@ -289,7 +303,7 @@ int main(int argc, char *argv[])
                 }
                 uint32_t echo_id = wait_out.qr_value.sga.id;
 
-#ifdef DMTR_PROFILE
+#ifdef NEW_DMTR_PROFILE
                 qtemp = tokens[idx];
                 auto pop_dt = boost::chrono::steady_clock::now() - start_times[qtemp];
                 start_times.erase(qtemp);
@@ -300,19 +314,19 @@ int main(int argc, char *argv[])
                 if (0 != fqd) {
                     printf("Fqd is %d\n", fqd);
                     // log to file
-#ifdef DMTR_PROFILE
+#ifdef NEW_DMTR_PROFILE
                     auto t0 = boost::chrono::steady_clock::now();
 #endif
                     DMTR_OK(dmtr_push(&qtemp, fqd, &wait_out.qr_value.sga));
                     DMTR_OK(dmtr_wait(NULL, qtemp));
-#ifdef DMTR_PROFILE
+#ifdef NEW_DMTR_PROFILE
                     auto log_dt = boost::chrono::steady_clock::now() - t0;
                     DMTR_OK(dmtr_record_latency(file_log_latency, log_dt.count()));
 #endif
                 }
 #endif
 
-#ifdef DMTR_PROFILE
+#ifdef NEW_DMTR_PROFILE
                 auto t0 = boost::chrono::steady_clock::now();
 #endif
                 // remove last push token
@@ -345,14 +359,22 @@ int main(int argc, char *argv[])
                 
                 // reserialize the message to send back into the array
                 if (run_protobuf_test) {
-#ifdef DMTR_PROFILE
+#ifdef NEW_DMTR_PROFILE
                     auto start_serialize_counter = rdtsc();
                     auto start_serialize = boost::chrono::steady_clock::now();
 #endif
                     // define context if capnproto or flatbuffers
+#ifdef CAPNPROTO_PROFILE
+    auto start_capnproto_alloc = boost::chrono::steady_clock::now();
+#endif
                     capnp::MallocMessageBuilder message_builder;
+#ifdef CAPNPROTO_PROFILE
+    auto end_capnproto_alloc = boost::chrono::steady_clock::now();
+    dmtr_record_latency(capnproto_alloc, (end_capnproto_alloc - start_capnproto_alloc).count());
+#endif
                     flatbuffers::FlatBufferBuilder fb_builder(packet_size);
                     cornflakes::GetMessageCF cornflakes_get;
+                    
                     
                     void *context = NULL;
                     switch (library) {
@@ -369,7 +391,7 @@ int main(int argc, char *argv[])
                             break;
                     }
                     echo->serialize_message(pushed_buffers[idx], context);
-#ifdef DMTR_PROFILE
+#ifdef NEW_DMTR_PROFILE
                     auto end_serialize = boost::chrono::steady_clock::now();
                     auto end_serialize_counter = rdtsc();
                     auto serialize_time = end_serialize - start_serialize;
@@ -393,13 +415,13 @@ int main(int argc, char *argv[])
                 }
 
                 sent++;
-#ifdef DMTR_PROFILE
+#ifdef NEW_DMTR_PROFILE
                 auto push_dt = boost::chrono::steady_clock::now() - t0;
                 DMTR_OK(dmtr_record_latency(push_latency, push_dt.count()));
 #endif
                 // async pop to get next message
                 DMTR_OK(dmtr_pop(&tokens[idx], wait_out.qr_qd));
-#ifdef DMTR_PROFILE
+#ifdef NEW_DMTR_PROFILE
                 start_times[tokens[idx]] = t0;
 #endif
                 //fprintf(stderr, "send complete.\n");
@@ -415,5 +437,3 @@ int main(int argc, char *argv[])
         }
     }
 }
-
-

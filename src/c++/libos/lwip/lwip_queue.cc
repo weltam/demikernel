@@ -821,7 +821,7 @@ int dmtr::lwip_queue::push_thread(task::thread_type::yield_type &yield, task::th
                 char *payload = reinterpret_cast<char *>(sga->sga_segs[1].sgaseg_buf);
                 ::rte_pktmbuf_attach_extbuf(pkts[1], (void *)payload, ext_mem_cfg->ext_mem_iova, sga->sga_segs[1].sgaseg_len, ext_mem_cfg->shinfo);
                 pkts[0]->next = pkts[1];
-                //pkt = pkts[0];
+                pkt = pkts[0];
             } else {
                 DMTR_OK(rte_pktmbuf_alloc(pkt, our_mbuf_pool));
             }
@@ -1734,7 +1734,7 @@ int dmtr::lwip_queue::set_use_external_memory(void *mmap_addr, uint16_t *mmap_le
     extbuf_mbuf_pool = ::rte_mempool_create_empty("extbuf_mempool",
                                         NUM_MBUFS * nb_ports,
                                         elt_size,
-                                        0,
+                                        MBUF_CACHE_SIZE,
                                         sizeof(struct rte_pktmbuf_pool_private),
                                         rte_socket_id(), 0);
     if (extbuf_mbuf_pool == NULL) {

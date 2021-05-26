@@ -7,23 +7,32 @@
 #include "message.hh"
 #include <string>
 #include <dmtr/sga.h>
+#include <dmtr/latency.h>
 #include <sys/types.h>
 
 using namespace std;
 
+//#define DMTR_PROFILE
+
 class capnproto_echo: public echo_message
 {
+#ifdef DMTR_PROFILE
+    private: dmtr_latency_t *cast_latency;
+    private: dmtr_latency_t *copy_latency;
+    private: dmtr_latency_t *encode_latency;
+    private: dmtr_latency_t *decode_latency;
+#endif
     private: string string_field;
-
     public: capnproto_echo(uint32_t field_size, string message_type);
 
     public: virtual void serialize_message(dmtr_sgarray_t &sga, void *context);
     public: virtual void deserialize_message(dmtr_sgarray_t &sga);
 
+
     public: void encode_msg(dmtr_sgarray_t &sga, kj::ArrayPtr<const kj::ArrayPtr<const capnp::word>> segments);
 
     public: void decode_msg(dmtr_sgarray_t &sga, kj::ArrayPtr<const capnp::word>* segments);
-    public: void print_counters() {}
+    public: void print_counters();
 
     private: void build_get(GetMessageCP::Builder getMsg);
     private: void recursive_get(GetMessageCP::Builder builder, uint32_t field_size);
