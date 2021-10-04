@@ -2,6 +2,9 @@
 #![feature(maybe_uninit_uninit_array, new_uninit)]
 #![feature(try_blocks)]
 
+#[macro_use]
+extern crate log;
+
 use catnip::{
     file_table::FileDescriptor,
     interop::{

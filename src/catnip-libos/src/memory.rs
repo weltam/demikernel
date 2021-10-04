@@ -1,17 +1,19 @@
 use anyhow::Error;
 use catnip::collections::bytes::{Bytes, BytesMut};
 use catnip::interop::{dmtr_sgarray_t, dmtr_sgaseg_t};
+use catnip::logging;
 use catnip::protocols::ethernet2::frame::ETHERNET2_HEADER_SIZE;
 use catnip::protocols::ipv4::datagram::IPV4_HEADER_SIZE;
 use catnip::protocols::tcp::segment::MAX_TCP_HEADER_SIZE;
 use catnip::runtime::RuntimeBuf;
 use dpdk_rs::{
     rte_errno, rte_mbuf, rte_mempool, rte_mempool_calc_obj_size, rte_mempool_mem_iter,
-    rte_mempool_memhdr, rte_mempool_objhdr, rte_mempool_objsz, rte_pktmbuf_adj, rte_pktmbuf_alloc,
-    rte_pktmbuf_clone, rte_pktmbuf_free, rte_pktmbuf_headroom, rte_pktmbuf_pool_create,
-    rte_pktmbuf_tailroom, rte_pktmbuf_trim, rte_socket_id, rte_strerror,
+    rte_mempool_memhdr, rte_mempool_obj_iter, rte_mempool_objhdr, rte_mempool_objsz,
+    rte_pktmbuf_adj, rte_pktmbuf_alloc, rte_pktmbuf_clone, rte_pktmbuf_free, rte_pktmbuf_headroom,
+    rte_pktmbuf_pool_create, rte_pktmbuf_tailroom, rte_pktmbuf_trim, rte_socket_id, rte_strerror,
 };
 use libc::{c_uint, c_void};
+use log;
 use std::ffi::CString;
 use std::mem;
 use std::ops::Deref;
@@ -307,7 +309,161 @@ struct Inner {
     body_region_len: usize,
 }
 
+pub const PAGESIZE: usize = 4096;
+const PGSHIFT_4KB: usize = 12;
+const PGSHIFT_2MB: usize = 21;
+const PGSHIFT_1GB: usize = 20;
+const PGSIZE_4KB: usize = 1 << PGSHIFT_4KB;
+const PGSIZE_2MB: usize = 1 << PGSHIFT_2MB;
+const PGSIZE_1GB: usize = 1 << PGSHIFT_1GB;
+const PGMASK_4KB: usize = PGSIZE_4KB - 1;
+const PGMASK_2MB: usize = PGSIZE_2MB - 1;
+const PGMASK_1GB: usize = PGSIZE_1GB - 1;
+
 impl Inner {
+    fn probe(
+        mbuf_pool: *mut rte_mempool,
+    ) -> Result<(usize, usize, usize, usize, usize, usize), Error> {
+        let mut mbuf_addrs: Vec<usize> = vec![];
+        // separate, per page log: (page, memzone_id, memzone_start, memzone_len)
+        let mut memzones: Vec<(usize, usize, usize, usize)> = vec![];
+
+        fn pgoff2mb(addr: *const u8) -> usize {
+            (addr as usize) & PGMASK_2MB
+        }
+
+        pub fn closest_2mb_page(addr: *const u8) -> usize {
+            let off = pgoff2mb(addr);
+            addr as usize - off
+        }
+
+        // callback to iterate over the memory regions
+        extern "C" fn memzone_callback(
+            mp: *mut rte_mempool,
+            opaque: *mut ::std::os::raw::c_void,
+            memhdr: *mut rte_mempool_memhdr,
+            idx: ::std::os::raw::c_uint,
+        ) {
+            let mr = unsafe { &mut *(opaque as *mut Vec<(usize, usize, usize, usize)>) };
+            let (addr, len) = unsafe { ((*memhdr).addr, (*memhdr).len) };
+            let hugepage_size = unsafe { (*(*mp).mz).hugepage_sz as usize };
+            let num_pages = (len as f64 / hugepage_size as f64).ceil() as usize;
+            let mut page_addr = closest_2mb_page(addr as *const u8);
+            for _i in 0..num_pages {
+                mr.push((
+                    page_addr as usize,
+                    idx as usize,
+                    addr as usize,
+                    len as usize,
+                ));
+                page_addr += hugepage_size;
+            }
+        }
+
+        // callback to iterate over the mbuf pool itself
+        unsafe extern "C" fn mbuf_callback(
+            _mp: *mut rte_mempool,
+            opaque: *mut ::std::os::raw::c_void,
+            m: *mut ::std::os::raw::c_void,
+            _idx: u32,
+        ) {
+            let mbuf = m as *mut rte_mbuf;
+            let mbuf_vec = &mut *(opaque as *mut Vec<usize>);
+            mbuf_vec.push(mbuf as usize);
+        }
+
+        unsafe {
+            rte_mempool_obj_iter(
+                mbuf_pool,
+                Some(mbuf_callback),
+                &mut mbuf_addrs as *mut _ as *mut ::std::os::raw::c_void,
+            )
+        };
+
+        unsafe {
+            rte_mempool_mem_iter(
+                mbuf_pool,
+                Some(memzone_callback),
+                &mut memzones as *mut _ as *mut ::std::os::raw::c_void,
+            )
+        };
+
+        let mut space_between_mbufs = 0;
+        let beginning_page_offset = mbuf_addrs[0] - memzones[0].2;
+        debug!("Beginning page offset: {:?}", beginning_page_offset);
+        let mut page_offset = 0;
+        let mut cur_memzone = 0;
+        let mut ct = 0;
+        let mut first_on_page = true;
+        // first, calculate space between each mbuf
+        let pagesize = unsafe { (*(*mbuf_pool).mz).hugepage_sz as usize };
+
+        for mbuf in mbuf_addrs.iter() {
+            let mut closest_page = memzones[cur_memzone].0;
+            let mut memzone_addr = memzones[cur_memzone].2;
+            let mut memzone_len = memzones[cur_memzone].3;
+
+            if *mbuf >= (memzone_addr + memzone_len) || (*mbuf >= (closest_page + pagesize)) {
+                first_on_page = true;
+                cur_memzone += 1;
+                closest_page = memzones[cur_memzone].0;
+                memzone_addr = memzones[cur_memzone].2;
+                memzone_len = memzones[cur_memzone].3;
+                assert!(
+                    *mbuf >= memzone_addr && *mbuf <= (memzone_addr + memzone_len),
+                    "Something is off about address calculation."
+                );
+                let this_page_offset = mbuf - closest_page;
+                if page_offset != 0 && this_page_offset != page_offset {
+                    debug!(
+                        "For mbuf # {}, this current page offset {}, not equal to previous {}",
+                        ct, this_page_offset, page_offset
+                    );
+                }
+                page_offset = this_page_offset;
+            }
+
+            if !first_on_page {
+                // check the last - first
+                let last_addr = mbuf_addrs[ct - 1];
+                let space = mbuf - last_addr;
+                if ct > 1 {
+                    if space != space_between_mbufs {
+                        warn!("For mbuf # {}, space_between_mbufs is not the same as previous: space: {}, previous: {}", ct, space, space_between_mbufs);
+                        anyhow::bail!("Something is not right about the counts");
+                    }
+                }
+                if ct > 0 {
+                    space_between_mbufs = space;
+                }
+            }
+            ct += 1;
+            first_on_page = false;
+        }
+
+        assert!(space_between_mbufs != 0, "Space between mbufs is still 0");
+        assert!(page_offset != 0, "Page offset is still 0");
+
+        let start = mbuf_addrs[0];
+        let mut end = mbuf_addrs[unsafe { (*mbuf_pool).populated_size } as usize - 1];
+        end += unsafe { (*mbuf_pool).size } as usize;
+        let size = end - start;
+
+        let headroom = unsafe {
+            let actual_offset = ((*(start as *mut rte_mbuf)).buf_addr) as usize - start;
+            actual_offset - ((*mbuf_pool).header_size + (*mbuf_pool).private_data_size) as usize
+        };
+
+        Ok((
+            start,
+            size,
+            space_between_mbufs,
+            beginning_page_offset,
+            page_offset,
+            headroom,
+        ))
+    }
+
     fn new(config: MemoryConfig) -> Result<Self, Error> {
         let header_size = ETHERNET2_HEADER_SIZE + IPV4_HEADER_SIZE + MAX_TCP_HEADER_SIZE;
         let header_mbuf_size = header_size + config.inline_body_size;
@@ -331,6 +487,7 @@ impl Inner {
             let reason = unsafe { std::ffi::CStr::from_ptr(rte_strerror(rte_errno())) };
             anyhow::bail!("Failed to create header pool: {}", reason.to_str().unwrap())
         }
+        println!("header pool: {:?}", Self::probe(header_pool));
 
         let indirect_pool = unsafe {
             let name = CString::new("indirect_pool")?;
@@ -348,6 +505,7 @@ impl Inner {
         if indirect_pool.is_null() {
             anyhow::bail!("Failed to create indirect pool");
         }
+        println!("indirect pool: {:?}", Self::probe(indirect_pool));
 
         let body_pool = unsafe {
             let name = CString::new("body_pool")?;
@@ -363,6 +521,7 @@ impl Inner {
         if body_pool.is_null() {
             anyhow::bail!("Failed to create body pool");
         }
+        println!("body pool: {:?}", Self::probe(body_pool));
 
         let mut memory_regions: Vec<(usize, usize)> = vec![];
 
