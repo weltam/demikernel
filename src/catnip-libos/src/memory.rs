@@ -25,6 +25,36 @@ use std::sync::Arc;
 const RTE_PKTMBUF_HEADROOM: usize = 128;
 
 #[derive(Clone, Copy, Debug)]
+pub struct MemoryPoolInfo {
+    start: usize,
+    size: usize,
+    object_size: usize,      // includes padding
+    beginning_offset: usize, // page offset at beginning of region
+    page_offset: usize,      // offset on each page
+    headroom: usize,         // headroom at front of mbuf
+}
+
+impl MemoryPoolInfo {
+    pub fn new(
+        start: usize,
+        size: usize,
+        object_size: usize,
+        beginning_offset: usize,
+        page_offset: usize,
+        headroom: usize,
+    ) -> Self {
+        Self {
+            start,
+            size,
+            object_size,
+            beginning_offset,
+            page_offset,
+            headroom,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
 pub struct MemoryConfig {
     /// What is the cutoff point for copying application buffers into reserved body space within a
     /// header `mbuf`? Smaller values copy less but incur the fixed cost of chaining together
@@ -124,9 +154,15 @@ impl MemoryManager {
             anyhow::bail!("Out of bounds ptr {:?}", ptr);
         }
 
+        let pg2mb = closest_2mb_page(ptr as *const u8);
+        let base_mbuf = match pg2mb <= self.inner.body_pool_info.start {
+            true => self.inner.body_pool_info.start,
+            false => pg2mb + self.inner.body_pool_info.page_offset,
+        };
+
         let ptr_int = ptr as usize;
-        let ptr_offset = ptr_int - self.inner.body_region_addr;
-        let offset_within_alloc = ptr_offset % self.inner.body_alloc_size();
+        let ptr_offset = ptr_int - base_mbuf;
+        let offset_within_alloc = ptr_offset % self.inner.body_pool_info.object_size;
 
         if offset_within_alloc < (64 + 128) {
             anyhow::bail!(
@@ -136,7 +172,7 @@ impl MemoryManager {
             );
         }
 
-        let mbuf_ptr = (ptr_int - offset_within_alloc + 64) as *mut rte_mbuf;
+        let mbuf_ptr = (ptr_int - offset_within_alloc) as *mut rte_mbuf;
         Ok(mbuf_ptr)
     }
 
@@ -293,6 +329,8 @@ struct Inner {
     // Large body pool for buffers given to the application for zero-copy.
     body_pool: *mut rte_mempool,
 
+    body_pool_info: MemoryPoolInfo,
+
     // We assert that the body pool's memory region is in a single, contiguous virtual memory
     // region. Here is a diagram of the memory layout of `body_pool`.
     //
@@ -320,6 +358,15 @@ const PGMASK_4KB: usize = PGSIZE_4KB - 1;
 const PGMASK_2MB: usize = PGSIZE_2MB - 1;
 const PGMASK_1GB: usize = PGSIZE_1GB - 1;
 
+fn pgoff2mb(addr: *const u8) -> usize {
+    (addr as usize) & PGMASK_2MB
+}
+
+fn closest_2mb_page(addr: *const u8) -> usize {
+    let off = pgoff2mb(addr);
+    addr as usize - off
+}
+
 impl Inner {
     fn probe(
         mbuf_pool: *mut rte_mempool,
@@ -327,15 +374,6 @@ impl Inner {
         let mut mbuf_addrs: Vec<usize> = vec![];
         // separate, per page log: (page, memzone_id, memzone_start, memzone_len)
         let mut memzones: Vec<(usize, usize, usize, usize)> = vec![];
-
-        fn pgoff2mb(addr: *const u8) -> usize {
-            (addr as usize) & PGMASK_2MB
-        }
-
-        pub fn closest_2mb_page(addr: *const u8) -> usize {
-            let off = pgoff2mb(addr);
-            addr as usize - off
-        }
 
         // callback to iterate over the memory regions
         extern "C" fn memzone_callback(
@@ -487,7 +525,6 @@ impl Inner {
             let reason = unsafe { std::ffi::CStr::from_ptr(rte_strerror(rte_errno())) };
             anyhow::bail!("Failed to create header pool: {}", reason.to_str().unwrap())
         }
-        println!("header pool: {:?}", Self::probe(header_pool));
 
         let indirect_pool = unsafe {
             let name = CString::new("indirect_pool")?;
@@ -505,7 +542,6 @@ impl Inner {
         if indirect_pool.is_null() {
             anyhow::bail!("Failed to create indirect pool");
         }
-        println!("indirect pool: {:?}", Self::probe(indirect_pool));
 
         let body_pool = unsafe {
             let name = CString::new("body_pool")?;
@@ -521,7 +557,17 @@ impl Inner {
         if body_pool.is_null() {
             anyhow::bail!("Failed to create body pool");
         }
-        println!("body pool: {:?}", Self::probe(body_pool));
+        let (start, size, object_size, beginning_offset, page_offset, headroom) =
+            Self::probe(body_pool)?;
+        let body_pool_info = MemoryPoolInfo::new(
+            start,
+            size,
+            object_size,
+            beginning_offset,
+            page_offset,
+            headroom,
+        );
+        println!("body pool: {:?}", body_pool_info);
 
         let mut memory_regions: Vec<(usize, usize)> = vec![];
 
@@ -576,6 +622,7 @@ impl Inner {
             header_pool,
             indirect_pool,
             body_pool,
+            body_pool_info,
 
             body_region_addr: base_addr,
             body_region_len: total_len,
