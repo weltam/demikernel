@@ -3,8 +3,9 @@
 
 export PREFIX ?= $(HOME)
 
-export PKG_CONFIG_PATH ?= $(shell find $(PREFIX)/lib/ -name '*pkgconfig*' -type d)
-export LD_LIBRARY_PATH ?= $(shell find $(PREFIX)/lib/ -name '*x86_64-linux-gnu*' -type d)
+# export PKG_CONFIG_PATH ?= $(shell find $(PREFIX)/lib/ -name '*pkgconfig*' -type d)
+# export LD_LIBRARY_PATH ?= $(shell find $(PREFIX)/lib/ -name '*x86_64-linux-gnu*' -type d)
+export LD_LIBRARY_PATH ?= $(HOME)/aarch64-linux-gnu
 export CONFIG_PATH ?= $(HOME)/config.yaml
 
 export CARGO ?= $(HOME)/.cargo/bin/cargo
@@ -52,7 +53,8 @@ test: test-catnip
 
 test-catnip:
 	cd $(SRCDIR) && \
-	sudo -E LD_LIBRARY_PATH="$(LD_LIBRARY_PATH)" timeout $(TIMEOUT) $(CARGO) test $(BUILD) --features=$(DRIVER) $(CARGO_FLAGS) -p catnip-libos -- --nocapture $(TEST)
+	sudo -E LD_LIBRARY_PATH="$(LD_LIBRARY_PATH)" timeout $(TIMEOUT) $(CARGO) test $(BUILD) $(CARGO_FLAGS) -p catnip-libos -- --nocapture $(TEST)
+	# sudo -E LD_LIBRARY_PATH="$(LD_LIBRARY_PATH)" timeout $(TIMEOUT) $(CARGO) test $(BUILD) --features=$(DRIVER) $(CARGO_FLAGS) -p catnip-libos -- --nocapture $(TEST)
 
 test-catnap:
 	cd $(SRCDIR) && \

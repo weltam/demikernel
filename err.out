@@ -1,2 +1,5 @@
 cd /home/ubuntu/research/demikernel/src && \
 /home/ubuntu/.cargo/bin/cargo build --release -p catnip-libos 
+# /home/ubuntu/.cargo/bin/cargo build --release --features=mlx4 -p catnip-libos 
+cd /home/ubuntu/research/demikernel/src && \
+/home/ubuntu/.cargo/bin/cargo build --tests --release --features=mlx4 
