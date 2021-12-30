@@ -1,0 +1,2 @@
+cd /home/ubuntu/research/demikernel/src && \
+/home/ubuntu/.cargo/bin/cargo build --release -p catnip-libos 
