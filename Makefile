@@ -31,7 +31,8 @@ demikernel-all: demikernel-catnip
 
 demikernel-catnip:
 	cd $(SRCDIR) && \
-	$(CARGO) build $(BUILD) --features=$(DRIVER) -p catnip-libos $(CARGO_FLAGS)
+	$(CARGO) build $(BUILD) -p catnip-libos $(CARGO_FLAGS)
+	# $(CARGO) build $(BUILD) --features=$(DRIVER) -p catnip-libos $(CARGO_FLAGS)
 
 demikernel-catnap:
 	cd $(SRCDIR) && \
